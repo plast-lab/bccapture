@@ -17,8 +17,11 @@ To run the tests:
 ```make tests```
 
 Or, individually:
+
 ```make test_run_example```
+
 ```make test_run_proxy_example```
+
 ```make test_run_cafe```
 
 Tests test_run_proxy_example and test_run_cafe need a correct
