@@ -156,7 +156,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_beeing_redefine
   }
   else {
     // Ignore built-in classes.
-    int builtIn = starts_with("java/", name) || starts_with("javax/swing", name) || starts_with("sun/", name) || starts_with("jdk/", name);
+    int builtIn = starts_with("java/", name) || starts_with("javax/", name) || starts_with("com/sun", name) || starts_with("sun/", name) || starts_with("jdk/", name);
     if (builtIn) {
       printf("Ignoring built-in class: %s\n", name);
       // writeExecMethod(name);
