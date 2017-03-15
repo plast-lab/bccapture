@@ -72,7 +72,7 @@ void writeClass(const char* name, const char* out_base_dir, const char* out_dir,
     /* for (int i = 0; i < strlen(class_file_name); i++) */
     /*   if (class_file_name[i] == '$') */
     /* 	class_file_name[i] = '_'; */
-    printf("Creating %s (%d bytes)...\n", class_file_name, class_data_len);
+    printf("* Writing %s (%d bytes)...\n", class_file_name, class_data_len);
     FILE* class_file = fopen(class_file_name, "a");
     fwrite(class_data, class_data_len, 1, class_file);
     fclose(class_file);
@@ -91,11 +91,29 @@ void writeExecMethod(const char* class_name) {
 					   max_frame_count, frames, &count);
   if (err == JVMTI_ERROR_NONE && count >= 1) {
     char *method_name;
-    err = (*jvmti)->GetMethodName(jvmti, frames[0].method,
-				  &method_name, NULL, NULL);
+    jmethodID method_id = frames[0].method;
+    char* method_sig;
+    err = (*jvmti)->GetMethodName(jvmti, method_id,
+				  &method_name, NULL, &method_sig);
     if (err == JVMTI_ERROR_NONE) {
       // printf("Class %s loaded while executing method: %s\n", class_name, method_name);
-      printf("Executing method: %s\n", method_name);
+      if (method_sig != NULL)
+	printf("* In method: %s (signature: %s) ", method_name, method_sig);
+      else
+	printf("* In method: %s (no signature) ", method_name);
+
+      // Find class that defines the method.
+      jclass declaring_class;
+      jvmtiError err2 = (*jvmti)->GetMethodDeclaringClass(jvmti, method_id, &declaring_class);
+      if (err2 == JVMTI_ERROR_NONE) {
+	// Find class signature.
+	char* class_sig;
+	jvmtiError err3 = (*jvmti)->GetClassSignature(jvmti, declaring_class, &class_sig, NULL);
+	if ((err3 == JVMTI_ERROR_NONE) && (class_sig != NULL))
+	  printf("[declaring class: %s]\n", class_sig);
+      }
+      else
+	printf("[declaring class not found.]\n");
       fflush(stdout);
     }
   }
@@ -124,7 +142,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_beeing_redefine
   // auto-generated name for the .class file name.
   if (name == 0) {
     anonymous_class_counter++;
-    printf("Anonymous class %d found.\n", anonymous_class_counter);
+    printf("Anonymous class #%d found.\n", anonymous_class_counter);
     const int anon_name_len = 40;
     char* anon_name = calloc(anon_name_len, 1);
     int r = snprintf(anon_name, anon_name_len, "AnonGeneratedClass_%d", anonymous_class_counter);
@@ -132,7 +150,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_beeing_redefine
       printf("Internal error: too long auto-generated name for anonymous class.");
       exit(-1);
     }
-    printf("Class name: %s\n", anon_name);
+    printf("* Class name: %s\n", anon_name);
     writeClass(anon_name, out_base_dir, out_base_dir, class_data_len, class_data);
     writeExecMethod(anon_name);
   }
@@ -141,6 +159,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_beeing_redefine
     int builtIn = starts_with("java/", name) || starts_with("javax/swing", name) || starts_with("sun/", name) || starts_with("jdk/", name);
     if (builtIn) {
       printf("Ignoring built-in class: %s\n", name);
+      // writeExecMethod(name);
       return;
     }
 
@@ -205,7 +224,7 @@ static jint init_options(char *options) {
 static jint Agent_Initialize(JavaVM *jvm, char *options, void *reserved) {
   int rc;
 
-  if ((rc = (*jvm)->GetEnv(jvm, (void **)&jvmti, JVMTI_VERSION_1_1)) != JNI_OK) {
+  if ((rc = (*jvm)->GetEnv(jvm, (void **)&jvmti, JVMTI_VERSION_1_2)) != JNI_OK) {
     fprintf(stderr, "Unable to create jvmtiEnv, GetEnv failed, error = %d\n", rc);
     return JNI_ERR;
   }
