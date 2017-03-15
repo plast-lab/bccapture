@@ -79,6 +79,33 @@ void writeClass(const char* name, const char* out_base_dir, const char* out_dir,
   }
 }
 
+// Reads the stack and finds the innermost method.
+void writeExecMethod(const char* class_name) {
+  jint max_frame_count = 10;
+  jvmtiFrameInfo* frames = (jvmtiFrameInfo*)calloc(max_frame_count, sizeof(jvmtiFrameInfo));
+  jint count;
+
+  jthread current_thread = NULL;
+
+  jvmtiError err = (*jvmti)->GetStackTrace(jvmti, current_thread, 0,
+					   max_frame_count, frames, &count);
+  if (err == JVMTI_ERROR_NONE && count >= 1) {
+    char *method_name;
+    err = (*jvmti)->GetMethodName(jvmti, frames[0].method,
+				  &method_name, NULL, NULL);
+    if (err == JVMTI_ERROR_NONE) {
+      // printf("Class %s loaded while executing method: %s\n", class_name, method_name);
+      printf("Executing method: %s\n", method_name);
+      fflush(stdout);
+    }
+  }
+  else {
+    printf("No executing method!\n");
+    fflush(stdout);
+  }
+  free(frames);
+}
+
 /* The hook that instruments class loading and captures all generated
    bytecode. */
 void JNICALL
@@ -107,6 +134,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_beeing_redefine
     }
     printf("Class name: %s\n", anon_name);
     writeClass(anon_name, out_base_dir, out_base_dir, class_data_len, class_data);
+    writeExecMethod(anon_name);
   }
   else {
     // Ignore built-in classes.
@@ -134,8 +162,8 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_beeing_redefine
       printf("Saving class %s under \"%s\"\n", name, out_dir);
     }
     writeClass(name, out_base_dir, out_dir, class_data_len, class_data);
+    writeExecMethod(name);
   }
-
 }
 
 /*
