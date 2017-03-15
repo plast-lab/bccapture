@@ -127,7 +127,7 @@ void writeExecMethod(const char* class_name) {
 /* The hook that instruments class loading and captures all generated
    bytecode. */
 void JNICALL
-ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_beeing_redefined,
+ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined,
         jobject loader, const char* name, jobject protection_domain,
         jint class_data_len, const unsigned char* class_data,
         jint *new_class_data_len, unsigned char** new_class_data) {
@@ -137,6 +137,14 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_beeing_redefine
   char* out_base_dir = "out";
   size_t out_base_dir_len = strlen(out_base_dir);
   char* out_dir;
+
+  // This failure is mostly for diagnostic reasons. If we remove this
+  // check, we may end up with same-name classes, as in the case of
+  // the anonymous lambda classes.
+  if (class_being_redefined != NULL) {
+    printf("Class redefinition is currently not suported.\n");
+    exit(-1);
+  }
 
   // If no name is given (e.g. lambdas), then produce an
   // auto-generated name for the .class file name.
