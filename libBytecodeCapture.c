@@ -79,8 +79,28 @@ void writeClass(const char* name, const char* out_base_dir, const char* out_dir,
   }
 }
 
+void printClassLoaderInfo(JNIEnv *env, const jobject loader) {
+  // Show information about the class loader.
+  jclass loader_class = (*env)->GetObjectClass(env, loader);
+  if (loader_class == NULL) {
+    printf("[Error retrieving classloader (#1).]\n");
+  }
+  else {
+    char* loader_sig;
+    jvmtiError err = (*jvmti)->GetClassSignature(jvmti, loader_class, &loader_sig, NULL);
+    if ((err == JVMTI_ERROR_NONE) && (loader_sig != NULL)) {
+      printf("[classloader class: %s]\n", loader_sig);
+      fflush(stdout);
+    }
+    else {
+      printf("[Error retrieving classloader (#2).]\n");
+      fflush(stdout);
+    }
+  }
+}
+
 // Reads the stack and finds the innermost method.
-void writeExecMethod(const char* class_name) {
+void writeExecContext(JNIEnv *env, const char* class_name, const jobject loader) {
   jint max_frame_count = 10;
   jvmtiFrameInfo* frames = (jvmtiFrameInfo*)calloc(max_frame_count, sizeof(jvmtiFrameInfo));
   jint count;
@@ -110,18 +130,49 @@ void writeExecMethod(const char* class_name) {
 	char* class_sig;
 	jvmtiError err3 = (*jvmti)->GetClassSignature(jvmti, declaring_class, &class_sig, NULL);
 	if ((err3 == JVMTI_ERROR_NONE) && (class_sig != NULL))
-	  printf("[declaring class: %s]\n", class_sig);
+	  printf("[declaring class: %s]", class_sig);
+	else
+	  printf("[declaring class not found (err3).]");
       }
       else
-	printf("[declaring class not found.]\n");
+	printf("[declaring class not found (err2).]");
       fflush(stdout);
     }
   }
   else {
-    printf("No executing method!\n");
+    printf("[No executing method!]");
     fflush(stdout);
   }
   free(frames);
+  printClassLoaderInfo(env, loader);
+}
+
+void printLoadedClasses() {
+  jint class_count;
+  jclass* classes;
+  jvmtiError err0 = (*jvmti)->GetLoadedClasses(jvmti, &class_count, &classes);
+  if (err0 == JVMTI_ERROR_NONE) {
+    printf("%d loaded classes.\n", class_count);
+    for (int i=0; i<class_count; i++) {
+      // Find class signature.
+      char* class_sig;
+      jvmtiError err1 = (*jvmti)->GetClassSignature(jvmti, classes[i], &class_sig, NULL);
+      if ((err1 == JVMTI_ERROR_NONE) && (class_sig != NULL)) {
+	jint field_count;
+	jfieldID* fields;
+	jvmtiError err2 = (*jvmti)->GetClassFields(jvmti, classes[i], &field_count, &fields);
+	if (err2 == JVMTI_ERROR_NONE)
+	  printf("[class: %s (%d fields)]\n", class_sig, field_count);
+	else
+	  printf("[class: %s (cannot retrieve fields, error code %d)]\n", class_sig, err2);
+	fflush(stdout);
+      }
+      else {
+	printf("[Unknown class.]");
+	fflush(stdout);
+      }
+    }
+  }
 }
 
 /* The hook that instruments class loading and captures all generated
@@ -160,14 +211,14 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
     }
     printf("* Class name: %s\n", anon_name);
     writeClass(anon_name, out_base_dir, out_base_dir, class_data_len, class_data);
-    writeExecMethod(anon_name);
+    writeExecContext(env, anon_name, loader);
   }
   else {
     // Ignore built-in classes.
     int builtIn = starts_with("java/", name) || starts_with("javax/", name) || starts_with("com/sun", name) || starts_with("sun/", name) || starts_with("jdk/", name);
     if (builtIn) {
       // printf("Ignoring built-in class: %s\n", name);
-      // writeExecMethod(name);
+      // writeExecContext(name);
       return;
     }
 
@@ -189,7 +240,9 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
       printf("Saving class %s under \"%s\"\n", name, out_dir);
     }
     writeClass(name, out_base_dir, out_dir, class_data_len, class_data);
-    writeExecMethod(name);
+    writeExecContext(env, name, loader);
+
+    printLoadedClasses();
   }
 }
 
