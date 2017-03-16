@@ -316,3 +316,7 @@ JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM *jvm, char *options, void *reserved) 
 JNIEXPORT jint JNICALL Agent_OnAttach(JavaVM *jvm, char *options, void *reserved) {
   return Agent_Initialize(jvm, options, reserved);
 }
+
+JNIEXPORT void JNICALL Agent_OnUnload(JavaVM *vm) {
+  fprintf(stderr, "Agent terminates.\n");
+}
