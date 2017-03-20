@@ -101,7 +101,7 @@ void printClassLoaderInfo(JNIEnv *env, const jobject loader) {
 
 // Reads the stack and finds the innermost method.
 void writeExecContext(JNIEnv *env, const char* class_name, const jobject loader) {
-  jint max_frame_count = 10;
+  const jint max_frame_count = 47;
   jvmtiFrameInfo* frames = (jvmtiFrameInfo*)calloc(max_frame_count, sizeof(jvmtiFrameInfo));
   jint count;
 
