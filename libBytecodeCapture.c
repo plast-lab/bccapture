@@ -80,23 +80,23 @@ void writeClass(const char* name, const char* out_base_dir, const char* out_dir,
 }
 
 void printClassLoaderInfo(JNIEnv *env, const jobject loader) {
-  // Show information about the class loader.
-  jclass loader_class = (*env)->GetObjectClass(env, loader);
-  if (loader_class == NULL) {
-    printf("[Error retrieving classloader (#1).]\n");
-  }
+  if (loader == NULL)
+    printf("[Null classloader (bootstrap?)\n]");
   else {
-    char* loader_sig;
-    jvmtiError err = (*jvmti)->GetClassSignature(jvmti, loader_class, &loader_sig, NULL);
-    if ((err == JVMTI_ERROR_NONE) && (loader_sig != NULL)) {
-      printf("[classloader class: %s]\n", loader_sig);
-      fflush(stdout);
-    }
+    // Show information about the class loader.
+    jclass loader_class = (*env)->GetObjectClass(env, loader);
+    if (loader_class == NULL)
+      printf("[Error retrieving classloader (#1).]\n");
     else {
-      printf("[Error retrieving classloader (#2).]\n");
-      fflush(stdout);
+      char* loader_sig;
+      jvmtiError err = (*jvmti)->GetClassSignature(jvmti, loader_class, &loader_sig, NULL);
+      if ((err == JVMTI_ERROR_NONE) && (loader_sig != NULL))
+	printf("[classloader class: %s]\n", loader_sig);
+      else
+	printf("[Error retrieving classloader (#2).]\n");
     }
   }
+  fflush(stdout);
 }
 
 // Reads the stack and finds the innermost method.
@@ -110,33 +110,36 @@ void writeExecContext(JNIEnv *env, const char* class_name, const jobject loader)
   jvmtiError err = (*jvmti)->GetStackTrace(jvmti, current_thread, 0,
 					   max_frame_count, frames, &count);
   if (err == JVMTI_ERROR_NONE && count >= 1) {
-    char *method_name;
-    jmethodID method_id = frames[0].method;
-    char* method_sig;
-    err = (*jvmti)->GetMethodName(jvmti, method_id,
-				  &method_name, NULL, &method_sig);
-    if (err == JVMTI_ERROR_NONE) {
-      // printf("Class %s loaded while executing method: %s\n", class_name, method_name);
-      if (method_sig != NULL)
-	printf("* In method: %s (signature: %s) ", method_name, method_sig);
-      else
-	printf("* In method: %s (no signature) ", method_name);
-
-      // Find class that defines the method.
-      jclass declaring_class;
-      jvmtiError err2 = (*jvmti)->GetMethodDeclaringClass(jvmti, method_id, &declaring_class);
-      if (err2 == JVMTI_ERROR_NONE) {
-	// Find class signature.
-	char* class_sig;
-	jvmtiError err3 = (*jvmti)->GetClassSignature(jvmti, declaring_class, &class_sig, NULL);
-	if ((err3 == JVMTI_ERROR_NONE) && (class_sig != NULL))
-	  printf("[declaring class: %s]", class_sig);
+    for (int i = 0; i < count; i++) {
+      char *method_name;
+      jmethodID method_id = frames[i].method;
+      char* method_sig;
+      err = (*jvmti)->GetMethodName(jvmti, method_id,
+				    &method_name, NULL, &method_sig);
+      if (err == JVMTI_ERROR_NONE) {
+	printf("{ Frame %d: ", i);
+	// printf("Class %s loaded while executing method: %s\n", class_name, method_name);
+	if (method_sig != NULL)
+	  printf("* In method: %s (signature: %s) ", method_name, method_sig);
 	else
-	  printf("[declaring class not found (err3).]");
+	  printf("* In method: %s (no signature) ", method_name);
+
+	// Find class that defines the method.
+	jclass declaring_class;
+	jvmtiError err2 = (*jvmti)->GetMethodDeclaringClass(jvmti, method_id, &declaring_class);
+	if (err2 == JVMTI_ERROR_NONE) {
+	  // Find class signature.
+	  char* class_sig;
+	  jvmtiError err3 = (*jvmti)->GetClassSignature(jvmti, declaring_class, &class_sig, NULL);
+	  if ((err3 == JVMTI_ERROR_NONE) && (class_sig != NULL))
+	    printf("[declaring class: %s]", class_sig);
+	  else
+	    printf("[declaring class not found (err3).]");
+	}
+	else
+	  printf("[declaring class not found (err2).]");
+	printf(" }\n"); fflush(stdout);
       }
-      else
-	printf("[declaring class not found (err2).]");
-      fflush(stdout);
     }
   }
   else {
