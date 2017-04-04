@@ -30,6 +30,12 @@
 
 static jvmtiEnv *jvmti = NULL;
 static jvmtiEventCallbacks callbacks;
+static jvmtiCapabilities caps;
+
+static int defined_sum;
+static int defined_by_defineClass;
+static int defined_by_defineAnonymousClass;
+static int defined_by_unknown;
 
 // From http://stackoverflow.com/questions/4770985/how-to-check-if-a-string-starts-with-another-string-in-c
 int starts_with(const char *pre, const char *str)
@@ -99,6 +105,47 @@ void printClassLoaderInfo(JNIEnv *env, const jobject loader) {
   fflush(stdout);
 }
 
+void printLocation(jlocation location, jmethodID method_id) {
+  jvmtiJlocationFormat locFormat;
+  if (location == -1) {
+    printf("(native method) "); return;
+  }
+  jvmtiError err1 = (*jvmti)->GetJLocationFormat(jvmti, &locFormat);
+  if (err1 != JVMTI_ERROR_NONE) {
+    printf("(error reading location) "); return;
+  }
+  else if (locFormat != JVMTI_JLOCATION_JVMBCI) {
+    printf("(unsupported location type) "); return;
+  }
+  else {
+    printf("(bytecode @ position %ld) ", location);
+    jint entry_count;
+    jvmtiLineNumberEntry* table;
+    jvmtiError lines_err = (*jvmti)->GetLineNumberTable(jvmti, method_id, &entry_count, &table);
+    if (lines_err == JVMTI_ERROR_NONE) {
+      int before = 0, found = 0;
+      for (int j = 0; j < entry_count; j++) {
+	jlocation loc = table[j].start_location;
+	if (loc < location)
+	  before = 1;
+	else if ((loc >= location) && before) {
+	  // This check needs one more instruction after the
+	  // one we need. This should always be the case, as
+	  // the last instruction is always a non-invoke
+	  // (e.g. areturn).
+	  printf("(candidate line number: %d) ", table[j-1].line_number);
+	  found = 1;
+	  break;
+	}
+      }
+      if (!found)
+	printf("(could not determine source location) ");
+    }
+    else
+      printf("(source location: error %d) ", lines_err);
+  }
+}
+
 // Reads the stack and finds the innermost method.
 void writeExecContext(JNIEnv *env, const char* class_name, const jobject loader) {
   const jint max_frame_count = 47;
@@ -107,22 +154,38 @@ void writeExecContext(JNIEnv *env, const char* class_name, const jobject loader)
 
   jthread current_thread = NULL;
 
+  int dc = defined_by_defineClass;
+  int dac = defined_by_defineAnonymousClass;
+  int du = defined_by_unknown;
+
   jvmtiError err = (*jvmti)->GetStackTrace(jvmti, current_thread, 0,
 					   max_frame_count, frames, &count);
-  if (err == JVMTI_ERROR_NONE && count >= 1) {
+  if (err != JVMTI_ERROR_NONE) {
+    printf("[error reading stack trace]");
+    fflush(stdout);
+    defined_by_unknown++;
+  }
+  else {
     for (int i = 0; i < count; i++) {
       char *method_name;
       jmethodID method_id = frames[i].method;
+      jlocation location = frames[i].location;
       char* method_sig;
       err = (*jvmti)->GetMethodName(jvmti, method_id,
 				    &method_name, NULL, &method_sig);
       if (err == JVMTI_ERROR_NONE) {
 	printf("{ Frame %d: ", i);
 	// printf("Class %s loaded while executing method: %s\n", class_name, method_name);
-	if (method_sig != NULL)
+	if (method_sig != NULL) {
 	  printf("* In method: %s (signature: %s) ", method_name, method_sig);
+	  if ((strcmp(method_name, "defineClass") == 0) && (i == 1))
+	    defined_by_defineClass++;
+	  if ((strcmp(method_name, "defineAnonymousClass") == 0) && (i == 0))
+	    defined_by_defineAnonymousClass++;
+	}
 	else
 	  printf("* In method: %s (no signature) ", method_name);
+	printLocation(location, method_id);
 
 	// Find class that defines the method.
 	jclass declaring_class;
@@ -141,12 +204,19 @@ void writeExecContext(JNIEnv *env, const char* class_name, const jobject loader)
 	printf(" }\n"); fflush(stdout);
       }
     }
-  }
-  else {
-    printf("[No executing method!]");
-    fflush(stdout);
+    if (count == 0) {
+      printf("[empty stack trace]");
+      fflush(stdout);
+    }
   }
   free(frames);
+
+  // Sanity check to see if class did not register (or was counted
+  // more than once).
+  if ((du + dc + dac + 1) != (defined_by_defineClass + defined_by_defineAnonymousClass + defined_by_unknown)) {
+    printf("[Missing class!] ");
+  }
+
   printClassLoaderInfo(env, loader);
 }
 
@@ -187,6 +257,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
         jint *new_class_data_len, unsigned char** new_class_data) {
 
   static int anonymous_class_counter = 0;
+  defined_sum++;
 
   char* out_base_dir = "out";
   size_t out_base_dir_len = strlen(out_base_dir);
@@ -309,10 +380,28 @@ static jint Agent_Initialize(JavaVM *jvm, char *options, void *reserved) {
     return JNI_ERR;
   }
 
+  (void)memset(&caps, 0, sizeof(jvmtiCapabilities));
+  caps.can_get_bytecodes = 1;
+  caps.can_get_line_numbers = 1;
+  caps.can_get_constant_pool = 1;
+
+  jvmtiError caps_err = (*jvmti)->AddCapabilities(jvmti, &caps);
+  if (caps_err == JVMTI_ERROR_NONE) {
+  }
+  else
+    printf("Capabilities could not be set, some functionality may be missing.\n");
+
+  defined_sum = 0;
+  defined_by_unknown = 0;
+  defined_by_defineClass = 0;
+  defined_by_defineAnonymousClass = 0;
+
   return JNI_OK;
 }
 
 JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM *jvm, char *options, void *reserved) {
+  printf("Selecting extra capabilities...\n");
+
   return Agent_Initialize(jvm, options, reserved);
 }
 
@@ -322,4 +411,9 @@ JNIEXPORT jint JNICALL Agent_OnAttach(JavaVM *jvm, char *options, void *reserved
 
 JNIEXPORT void JNICALL Agent_OnUnload(JavaVM *vm) {
   fprintf(stderr, "Agent terminates.\n");
+  fprintf(stderr, "Classes defined: %d\n", defined_sum);
+  fprintf(stderr, "Classes defined by unknown code: %d\n", defined_by_unknown);
+  fprintf(stderr, "Classes defined by defineClass(): %d\n", defined_by_defineClass);
+  fprintf(stderr, "Classes defined by defineAnonymousClass(): %d\n", defined_by_defineAnonymousClass);
+  fprintf(stderr, "Missing classes: %d\n", defined_sum - (defined_by_unknown + defined_by_defineClass + defined_by_defineAnonymousClass));
 }
