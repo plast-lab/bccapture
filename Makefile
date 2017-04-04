@@ -12,7 +12,7 @@ all: c_agent
 # 	java -agentpath:~/workspace/jvmti/libClassLogger.so Main
 
 c_agent: $(AGENT_NAME).c
-	gcc -std=c99 -g -shared -fPIC -Wall -o $(AGENT_NAME).so -I $(JDK_INCLUDE) -I $(JDK_INCLUDE)/linux $(AGENT_NAME).c
+	gcc -std=c99 -g -shared -fPIC -Wall -o $(AGENT_NAME).so -I $(JDK_INCLUDE) -I $(JDK_INCLUDE)/linux -lpthread $(AGENT_NAME).c
 
 clean:
 	rm -f ClassLogger.o libBytecodeCapture.so libClassLogger.o libClassLogger.so Main.class some/package1/A.class

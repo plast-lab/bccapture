@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <alloca.h>
+#include <pthread.h>
 
 #include <jvmti.h>
 
@@ -32,10 +33,13 @@ static jvmtiEnv *jvmti = NULL;
 static jvmtiEventCallbacks callbacks;
 static jvmtiCapabilities caps;
 
+static pthread_mutex_t stats_lock = PTHREAD_MUTEX_INITIALIZER;
 static int defined_sum;
 static int defined_by_defineClass;
 static int defined_by_defineAnonymousClass;
 static int defined_by_unknown;
+static int defined_missing;
+static int defined_but_ignored;
 
 // From http://stackoverflow.com/questions/4770985/how-to-check-if-a-string-starts-with-another-string-in-c
 int starts_with(const char *pre, const char *str)
@@ -154,9 +158,12 @@ void writeExecContext(JNIEnv *env, const char* class_name, const jobject loader)
 
   jthread current_thread = NULL;
 
+  pthread_mutex_lock(&stats_lock);
+
   int dc = defined_by_defineClass;
   int dac = defined_by_defineAnonymousClass;
   int du = defined_by_unknown;
+  int dm = defined_missing;
 
   jvmtiError err = (*jvmti)->GetStackTrace(jvmti, current_thread, 0,
 					   max_frame_count, frames, &count);
@@ -172,22 +179,32 @@ void writeExecContext(JNIEnv *env, const char* class_name, const jobject loader)
       jlocation location = frames[i].location;
       char* method_sig;
       err = (*jvmti)->GetMethodName(jvmti, method_id,
-				    &method_name, NULL, &method_sig);
-      if (err == JVMTI_ERROR_NONE) {
-	printf("{ Frame %d: ", i);
-	// printf("Class %s loaded while executing method: %s\n", class_name, method_name);
-	if (method_sig != NULL) {
-	  printf("* In method: %s (signature: %s) ", method_name, method_sig);
-	  if ((strcmp(method_name, "defineClass") == 0) && (i == 1))
-	    defined_by_defineClass++;
-	  if ((strcmp(method_name, "defineAnonymousClass") == 0) && (i == 0))
-	    defined_by_defineAnonymousClass++;
-	}
-	else
-	  printf("* In method: %s (no signature) ", method_name);
-	printLocation(location, method_id);
+                                    &method_name, NULL, &method_sig);
+      if (err != JVMTI_ERROR_NONE) {
+        defined_by_unknown++;
+      } else {
+        printf("{ Frame %d: ", i);
+        // printf("Class %s loaded while executing method: %s\n", class_name, method_name);
+        printf("* In method: %s (signature: %s) ", method_name, method_sig == NULL? "no signature" : method_sig);
+        // Count topmost method in the stack (stats).
+        if (i == 0) {
+          if (method_sig != NULL) {
+            if (strcmp(method_name, "defineClass1") == 0)
+              defined_by_defineClass++;
+            else if (strcmp(method_name, "defineAnonymousClass") == 0)
+              defined_by_defineAnonymousClass++;
+            else {
+              printf("[Unknown top method!]");
+              defined_missing++;
+            }
+          } else {
+            printf("[Unnamed top method!]");
+            defined_missing++;
+          }
+        }
+        printLocation(location, method_id);
 
-	// Find class that defines the method.
+        // Find class that defines the method.
 	jclass declaring_class;
 	jvmtiError err2 = (*jvmti)->GetMethodDeclaringClass(jvmti, method_id, &declaring_class);
 	if (err2 == JVMTI_ERROR_NONE) {
@@ -205,17 +222,23 @@ void writeExecContext(JNIEnv *env, const char* class_name, const jobject loader)
       }
     }
     if (count == 0) {
-      printf("[empty stack trace]");
+      printf("[empty stack trace]\n");
       fflush(stdout);
+      defined_by_unknown;
     }
   }
   free(frames);
 
   // Sanity check to see if class did not register (or was counted
   // more than once).
-  if ((du + dc + dac + 1) != (defined_by_defineClass + defined_by_defineAnonymousClass + defined_by_unknown)) {
-    printf("[Missing class!] ");
+  int sum_before = dm + du + dc + dac;
+  int sum_after = defined_missing + defined_by_unknown + defined_by_defineClass + defined_by_defineAnonymousClass;
+  if ((sum_before + 1) != (sum_after)) {
+    printf("[Class stats check failed: diffs: %d, %d, %d, %d] ", defined_missing - dm,
+           defined_by_unknown - du, defined_by_defineClass - dc, defined_by_defineAnonymousClass - dac);
   }
+
+  pthread_mutex_unlock(&stats_lock);
 
   printClassLoaderInfo(env, loader);
 }
@@ -257,7 +280,10 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
         jint *new_class_data_len, unsigned char** new_class_data) {
 
   static int anonymous_class_counter = 0;
+
+  pthread_mutex_lock(&stats_lock);
   defined_sum++;
+  pthread_mutex_unlock(&stats_lock);
 
   char* out_base_dir = "out";
   size_t out_base_dir_len = strlen(out_base_dir);
@@ -274,7 +300,11 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
   // If no name is given (e.g. lambdas), then produce an
   // auto-generated name for the .class file name.
   if (name == 0) {
+
+    pthread_mutex_lock(&stats_lock);
     anonymous_class_counter++;
+    pthread_mutex_unlock(&stats_lock);
+
     printf("Anonymous class #%d found.\n", anonymous_class_counter);
     const int anon_name_len = 40;
     char* anon_name = calloc(anon_name_len, 1);
@@ -293,6 +323,11 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
     if (builtIn) {
       // printf("Ignoring built-in class: %s\n", name);
       // writeExecContext(name);
+
+      pthread_mutex_lock(&stats_lock);
+      defined_but_ignored++;
+      pthread_mutex_unlock(&stats_lock);
+
       return;
     }
 
@@ -395,6 +430,8 @@ static jint Agent_Initialize(JavaVM *jvm, char *options, void *reserved) {
   defined_by_unknown = 0;
   defined_by_defineClass = 0;
   defined_by_defineAnonymousClass = 0;
+  defined_but_ignored = 0;
+  defined_missing = 0;
 
   return JNI_OK;
 }
@@ -412,8 +449,10 @@ JNIEXPORT jint JNICALL Agent_OnAttach(JavaVM *jvm, char *options, void *reserved
 JNIEXPORT void JNICALL Agent_OnUnload(JavaVM *vm) {
   fprintf(stderr, "Agent terminates.\n");
   fprintf(stderr, "Classes defined: %d\n", defined_sum);
-  fprintf(stderr, "Classes defined by unknown code: %d\n", defined_by_unknown);
+  fprintf(stderr, "Classes defined (ignored): %d\n", defined_but_ignored);
+  fprintf(stderr, "Classes defined by unknown code (stack trace error or empty): %d\n", defined_by_unknown);
   fprintf(stderr, "Classes defined by defineClass(): %d\n", defined_by_defineClass);
   fprintf(stderr, "Classes defined by defineAnonymousClass(): %d\n", defined_by_defineAnonymousClass);
-  fprintf(stderr, "Missing classes: %d\n", defined_sum - (defined_by_unknown + defined_by_defineClass + defined_by_defineAnonymousClass));
+  fprintf(stderr, "Classes in yet-to-be-handled methods: %d\n", defined_missing);
+  fprintf(stderr, "Uncounted classes: %d\n", defined_sum - (defined_but_ignored + defined_by_unknown + defined_by_defineClass + defined_by_defineAnonymousClass + defined_missing));
 }
