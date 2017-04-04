@@ -81,7 +81,7 @@ void writeClass(const char* name, const char* out_base_dir, const char* out_dir,
 
 void printClassLoaderInfo(JNIEnv *env, const jobject loader) {
   if (loader == NULL)
-    printf("[Null classloader (bootstrap?)\n]");
+    printf("[Null classloader (bootstrap?)]\n");
   else {
     // Show information about the class loader.
     jclass loader_class = (*env)->GetObjectClass(env, loader);
