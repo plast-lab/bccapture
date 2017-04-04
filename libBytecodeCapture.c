@@ -205,17 +205,17 @@ void writeExecContext(JNIEnv *env, const char* class_name, const jobject loader)
         printLocation(location, method_id);
 
         // Find class that defines the method.
-	jclass declaring_class;
-	jvmtiError err2 = (*jvmti)->GetMethodDeclaringClass(jvmti, method_id, &declaring_class);
-	if (err2 == JVMTI_ERROR_NONE) {
-	  // Find class signature.
-	  char* class_sig;
-	  jvmtiError err3 = (*jvmti)->GetClassSignature(jvmti, declaring_class, &class_sig, NULL);
-	  if ((err3 == JVMTI_ERROR_NONE) && (class_sig != NULL))
-	    printf("[declaring class: %s]", class_sig);
-	  else
-	    printf("[declaring class not found (err3).]");
-	}
+        jclass declaring_class;
+        jvmtiError err2 = (*jvmti)->GetMethodDeclaringClass(jvmti, method_id, &declaring_class);
+        if (err2 == JVMTI_ERROR_NONE) {
+          // Find class signature.
+          char* class_sig;
+          jvmtiError err3 = (*jvmti)->GetClassSignature(jvmti, declaring_class, &class_sig, NULL);
+          if ((err3 == JVMTI_ERROR_NONE) && (class_sig != NULL))
+            printf("[declaring class: %s]", class_sig);
+          else
+            printf("[declaring class not found (err3).]");
+        }
 	else
 	  printf("[declaring class not found (err2).]");
 	printf(" }\n"); fflush(stdout);
