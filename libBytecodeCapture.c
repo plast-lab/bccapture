@@ -224,7 +224,7 @@ void writeExecContext(JNIEnv *env, const char* class_name, const jobject loader)
     if (count == 0) {
       printf("[empty stack trace]\n");
       fflush(stdout);
-      defined_by_unknown;
+      defined_by_unknown++;
     }
   }
   free(frames);
