@@ -95,7 +95,7 @@ int write_class(const char* name, const char* out_base_dir,
     fseek(existing, 0L, SEEK_END);
     size_t sz = ftell(existing);
     if (sz != class_data_len) {
-      fprintf(stderr, "File %s already exists, with different contents (different size: %ld vs. %ld).\n",
+      fprintf(stderr, "File %s already exists, with different contents (different size: %ld vs. %d).\n",
               class_file_name, sz, class_data_len);
       return 2;
     }
