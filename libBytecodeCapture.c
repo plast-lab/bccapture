@@ -95,7 +95,7 @@ void writeClass(const char* name, const char* out_base_dir,
   }
 }
 
-void printClassLoaderInfo(JNIEnv *env, const jobject loader, FILE* context_stream) {
+void print_classloader_info(FILE* context_stream, JNIEnv *env, const jobject loader) {
   if (loader == NULL)
     fprintf(context_stream, "[Null classloader (bootstrap?)]\n");
   else {
@@ -136,8 +136,8 @@ void print_bc(FILE* stream, const unsigned char c) {
   }
 }
 
-void count_bytecode_location(jlocation location, jmethodID method_id,
-			     FILE* context_stream) {
+void count_bytecode_location(FILE* context_stream, jlocation location,
+                             jmethodID method_id) {
   jint bytecode_count_ptr;
   unsigned char* bytecodes_ptr;
   jvmtiError bc_err = (*jvmti)->GetBytecodes(jvmti, method_id, &bytecode_count_ptr, &bytecodes_ptr);
@@ -155,8 +155,8 @@ void count_bytecode_location(jlocation location, jmethodID method_id,
     fprintf(context_stream, "(error reading bytecode)");
 }
 
-void printLocation(jlocation location, jmethodID method_id, int* read_bytecode,
-                   FILE* context_stream) {
+void print_location(FILE* context_stream, jlocation location,
+                    jmethodID method_id, int* read_bytecode) {
   jvmtiJlocationFormat locFormat;
   if (location == -1) {
     fprintf(context_stream, "(native method) "); return;
@@ -171,7 +171,7 @@ void printLocation(jlocation location, jmethodID method_id, int* read_bytecode,
   else {
     fprintf(context_stream, "(bytecode @ position %ld) ", location);
     if (*read_bytecode) {
-      count_bytecode_location(location, method_id, context_stream);
+      count_bytecode_location(context_stream, location, method_id);
       *read_bytecode = 0;
     }
 
@@ -221,6 +221,23 @@ FILE* choose_stdout_or_file(const char* class_name, const char* out_base_dir,
     }
     return context_stream;
   }
+}
+
+void print_declaring_class(FILE* context_stream, jmethodID method_id) {
+  // Find class that defines the method.
+  jclass declaring_class;
+  jvmtiError err2 = (*jvmti)->GetMethodDeclaringClass(jvmti, method_id, &declaring_class);
+  if (err2 == JVMTI_ERROR_NONE) {
+    // Find class signature.
+    char* class_sig;
+    jvmtiError err3 = (*jvmti)->GetClassSignature(jvmti, declaring_class, &class_sig, NULL);
+    if ((err3 == JVMTI_ERROR_NONE) && (class_sig != NULL))
+      fprintf(context_stream, "[declaring class: %s]", class_sig);
+    else
+      fprintf(context_stream, "[declaring class not found (err3).]");
+  }
+  else
+    fprintf(context_stream, "[declaring class not found (err2).]");
 }
 
 // Reads the stack and finds the innermost method.
@@ -286,22 +303,8 @@ void writeExecContext(JNIEnv *env, const char* class_name,
 	    read_bytecode = 1;
           }
         }
-        printLocation(location, method_id, &read_bytecode, context_stream);
-
-        // Find class that defines the method.
-        jclass declaring_class;
-        jvmtiError err2 = (*jvmti)->GetMethodDeclaringClass(jvmti, method_id, &declaring_class);
-        if (err2 == JVMTI_ERROR_NONE) {
-          // Find class signature.
-          char* class_sig;
-          jvmtiError err3 = (*jvmti)->GetClassSignature(jvmti, declaring_class, &class_sig, NULL);
-          if ((err3 == JVMTI_ERROR_NONE) && (class_sig != NULL))
-            fprintf(context_stream, "[declaring class: %s]", class_sig);
-          else
-            fprintf(context_stream, "[declaring class not found (err3).]");
-        }
-	else
-	  fprintf(context_stream, "[declaring class not found (err2).]");
+        print_location(context_stream, location, method_id, &read_bytecode);
+        print_declaring_class(context_stream, method_id);
 	fprintf(context_stream, " }\n");
 	fflush(context_stream);
       }
@@ -323,9 +326,9 @@ void writeExecContext(JNIEnv *env, const char* class_name,
            defined_by_unknown - du, defined_by_defineClass - dc, defined_by_defineAnonymousClass - dac);
   }
 
-  pthread_mutex_unlock(&stats_lock);
+  print_classloader_info(context_stream, env, loader);
 
-  printClassLoaderInfo(env, loader, context_stream);
+  pthread_mutex_unlock(&stats_lock);
 
   if (use_file != USE_STDOUT)
     fclose(context_stream);
