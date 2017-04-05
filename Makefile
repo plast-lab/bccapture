@@ -1,5 +1,5 @@
 AGENT_NAME=libBytecodeCapture
-JDK_INCLUDE=/usr/lib/jvm/java-8-openjdk-amd64/include
+JDK_INCLUDE?=/usr/lib/jvm/java-8-openjdk-amd64/include
 DOOP_BENCHMARKS=/home/george/doop-benchmarks
 GDB=gdb -tui -args
 
