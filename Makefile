@@ -39,3 +39,6 @@ test_run_cafe:
 
 test_run_tradebeans:
 	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar tradebeans
+
+jar_tradebeans:
+	jar cf tradebeans.jar -C out .
