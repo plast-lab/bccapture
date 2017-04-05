@@ -239,8 +239,8 @@ void print_location(FILE* context_stream, jlocation location,
 }
 
 FILE* choose_stdout_or_file(const char* class_name, const char* out_base_dir,
-			    const char* out_dir, const int use_file) {
-  if (use_file == USE_STDOUT)
+			    const char* out_dir, const int file_mode) {
+  if (file_mode == USE_STDOUT)
     return stdout;
   else {
     size_t info_file_name_len = strlen(out_dir) + 1 + strlen(class_name) + 7;
@@ -277,14 +277,14 @@ void print_declaring_class(FILE* context_stream, jmethodID method_id) {
 }
 
 // Reads the stack and finds the innermost method.
-void writeExecContext(JNIEnv *env, const char* class_name,
-                      const jobject loader, const char* out_base_dir,
-                      const char* out_dir, const int use_file) {
+void write_exec_context(JNIEnv *env, const char* class_name,
+                        const jobject loader, const char* out_base_dir,
+                        const char* out_dir, const int file_mode) {
   const jint max_frame_count = 47;
   jvmtiFrameInfo* frames = (jvmtiFrameInfo*)calloc(max_frame_count, sizeof(jvmtiFrameInfo));
   jint count;
   jthread current_thread = NULL;
-  FILE* context_stream = choose_stdout_or_file(class_name, out_base_dir, out_dir, use_file);
+  FILE* context_stream = choose_stdout_or_file(class_name, out_base_dir, out_dir, file_mode);
 
   pthread_mutex_lock(&stats_lock);
 
@@ -366,7 +366,7 @@ void writeExecContext(JNIEnv *env, const char* class_name,
 
   pthread_mutex_unlock(&stats_lock);
 
-  if (use_file != USE_STDOUT)
+  if (file_mode != USE_STDOUT)
     fclose(context_stream);
 }
 
@@ -396,6 +396,15 @@ void printLoadedClasses(FILE* context_stream) {
       }
     }
   }
+}
+
+void record_class(JNIEnv *env, const char* class_name,
+		  const jobject loader, const char* out_base_dir,
+		  const char* out_dir, const int file_mode,
+		  jint class_data_len, const unsigned char* class_data) {
+  make_dirs(out_dir);
+  write_class(class_name, out_base_dir, class_data_len, class_data);
+  write_exec_context(env, class_name, loader, out_base_dir, out_dir, file_mode);
 }
 
 /* The hook that instruments class loading and captures all generated
@@ -446,9 +455,8 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
     }
     printf("* Class name: %s\n", anon_name);
 
-    make_dirs(out_base_dir);
-    write_class(anon_name, out_base_dir, class_data_len, class_data);
-    writeExecContext(env, anon_name, loader, out_base_dir, out_base_dir, file_mode);
+    record_class(env, anon_name, loader, out_base_dir, out_base_dir, file_mode,
+                 class_data_len, class_data);
   }
   else {
     // Ignore built-in classes.
@@ -481,10 +489,8 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
       printf("Saving class %s under \"%s\"\n", name, out_dir);
     }
 
-    make_dirs(out_dir);
-    write_class(name, out_base_dir, class_data_len, class_data);
-    writeExecContext(env, name, loader, out_base_dir, out_dir, file_mode);
-
+    record_class(env, name, loader, out_base_dir, out_dir, file_mode,
+                 class_data_len, class_data);
     // printLoadedClasses(stdout);
   }
 
