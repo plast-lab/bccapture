@@ -26,8 +26,11 @@
 #include <string.h>
 #include <alloca.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #include <jvmti.h>
+
+#define SERIALIZE 1
 
 static jvmtiEnv *jvmti = NULL;
 static jvmtiEventCallbacks callbacks;
@@ -35,7 +38,7 @@ static jvmtiCapabilities caps;
 static int bytecodes[256];
 
 static pthread_mutex_t stats_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t print_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t serialize_lock = PTHREAD_MUTEX_INITIALIZER;
 static int defined_sum;
 static int defined_by_defineClass;
 static int defined_by_defineAnonymousClass;
@@ -71,10 +74,12 @@ void make_dirs(const char* out_dir) {
 
 // Writes a bytecode data stream to a file. Takes the fully-qualifed
 // name of the class (e.g. 'package1/package2/C'), the base output
-// directory (e.g. 'out'), the full output dir for the target class
-// (e.g. 'out/package1/package2'), the length of the class data, and
-// the class data byte array.
-void writeClass(const char* name, const char* out_base_dir,
+// directory (e.g. 'out'), the full output dir for the target class,
+// the length of the class data, and the class data byte array.
+//
+// Returns 0 if the class was saved, 1 if the same class has already
+// been saved, 2 if another class with the same name was saved.
+int write_class(const char* name, const char* out_base_dir,
                 jint class_data_len, const unsigned char* class_data) {
   
   size_t class_file_name_len = strlen(out_base_dir) + 1 + strlen(name) + 7;
@@ -83,16 +88,47 @@ void writeClass(const char* name, const char* out_base_dir,
   if (r >= class_file_name_len) {
     printf("Internal error: malformed class file name, wrote %d bytes (out of %ld)\n", r, class_file_name_len);
     exit(-1);
+  } else if (access(class_file_name, F_OK) != -1) {
+    // Output file already exists, check if its contents are the
+    // same or we have another class with the same name.
+    FILE* existing = fopen(class_file_name, "r");
+    fseek(existing, 0L, SEEK_END);
+    size_t sz = ftell(existing);
+    if (sz != class_data_len) {
+      fprintf(stderr, "File %s already exists, with different contents (different size: %ld vs. %ld).\n",
+              class_file_name, sz, class_data_len);
+      return 2;
+    }
+    else {
+      rewind(existing);
+      size_t different_pos = -1;
+      for (size_t pos = 0; pos < class_data_len; pos++)
+        if (fgetc(existing) != class_data[pos]) {
+          different_pos = pos;
+          break;
+        }
+      fclose(existing);
+      if (different_pos == -1) {
+        fprintf(stderr, "File %s already exists, with same contents.\n", class_file_name);
+        return 1;
+      }
+      else {
+        fprintf(stderr, "File %s already exists, with different contents (first different byte @ pos %ld)\n", class_file_name, different_pos);
+        // exit(-1);
+        return 2;
+      }
+    }
   } else {
     /* // Replace '$' with '_' (e.g. generated proxy classes). */
     /* for (int i = 0; i < strlen(class_file_name); i++) */
     /*   if (class_file_name[i] == '$') */
-    /* 	class_file_name[i] = '_'; */
+    /*  class_file_name[i] = '_'; */
     printf("* Writing %s (%d bytes)...\n", class_file_name, class_data_len);
     FILE* class_file = fopen(class_file_name, "a");
     fwrite(class_data, class_data_len, 1, class_file);
     fclose(class_file);
   }
+  return 0;
 }
 
 void print_classloader_info(FILE* context_stream, JNIEnv *env, const jobject loader) {
@@ -372,7 +408,8 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
 
   static int anonymous_class_counter = 0;
 
-  pthread_mutex_lock(&print_lock);
+  if (SERIALIZE)
+    pthread_mutex_lock(&serialize_lock);
 
   pthread_mutex_lock(&stats_lock);
   defined_sum++;
@@ -404,13 +441,13 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
     char* anon_name = calloc(anon_name_len, 1);
     int r = snprintf(anon_name, anon_name_len, "AnonGeneratedClass_%d", anonymous_class_counter);
     if (r >= anon_name_len) {
-      printf("Internal error: too long auto-generated name for anonymous class.");
+      fprintf(stderr, "Internal error: too long auto-generated name for anonymous class.");
       exit(-1);
     }
     printf("* Class name: %s\n", anon_name);
 
     make_dirs(out_base_dir);
-    writeClass(anon_name, out_base_dir, class_data_len, class_data);
+    write_class(anon_name, out_base_dir, class_data_len, class_data);
     writeExecContext(env, anon_name, loader, out_base_dir, out_base_dir, file_mode);
   }
   else {
@@ -445,14 +482,17 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
     }
 
     make_dirs(out_dir);
-    writeClass(name, out_base_dir, class_data_len, class_data);
+    write_class(name, out_base_dir, class_data_len, class_data);
     writeExecContext(env, name, loader, out_base_dir, out_dir, file_mode);
 
     // printLoadedClasses(stdout);
   }
 
  capture_end:
-  pthread_mutex_unlock(&print_lock);
+  if (SERIALIZE)
+    pthread_mutex_unlock(&serialize_lock);
+  else
+    return;
 }
 
 /*
