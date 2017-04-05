@@ -36,3 +36,6 @@ test_run_proxy_example:
 # elements).
 test_run_cafe:
 	java -agentpath:./$(AGENT_NAME).so -cp $(DOOP_BENCHMARKS)/proxies/cafebahn/libs/commons-codec-1.3.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/libs/commons-httpclient-3.0.1.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/libs/commons-logging-1.1.1.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/libs/commons-logging-1.1.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/libs/log4j-1.2.14.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/libs/org.eclipse.mylyn.wikitext.core_1.6.0.I20120312-2356.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/libs/org.eclipse.mylyn.wikitext.mediawiki.core_1.6.0.I20120312-2356.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/libs/RXTXcomm.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/libs/ws-commons-util-1.0.1.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/libs/xmlrpc-client-3.0.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/libs/xmlrpc-common-3.0.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/libs/xmlrpc-server-3.0.jar:$(DOOP_BENCHMARKS)/proxies/cafebahn/rgzm.jar tochterUhr.gui.Digitaluhr
+
+test_run_tradebeans:
+	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar tradebeans
