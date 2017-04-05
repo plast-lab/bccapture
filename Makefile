@@ -41,4 +41,5 @@ test_run_tradebeans:
 	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar tradebeans
 
 jar_tradebeans:
+	cp -Rf dacapo-bach/tradebeans-skeleton/* out/
 	jar cf tradebeans.jar -C out .
