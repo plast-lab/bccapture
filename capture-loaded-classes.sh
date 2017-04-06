@@ -15,15 +15,19 @@ function generateJar {
     jar cfm $1-loaded-classes.jar ${MANIFEST} -C out .
 }
 
-# dacap-bach choices (batik doesn't work):
+# dacapo-bach choices (batik doesn't work and fop/tradesoap/tomcat are
+# not in doop-benchmarks):
+#
 # avrora batik eclipse fop h2 jython luindex lusearch pmd sunflow tomcat tradebeans tradesoap xalan
 
 if [ "$1" == "" ]
 then
-    for b in avrora eclipse fop h2 jython luindex lusearch pmd sunflow tomcat tradebeans tradesoap xalan
+    for b in avrora eclipse h2 jython luindex lusearch pmd sunflow tradebeans xalan
     do
-	generateJar $b
-	echo Finished capture.
+	generateJar ${b}
+	echo Finished capture [${b}].
+	./fuse-jars.sh /home/gfour/doop-benchmarks/dacapo-bach/${b}.jar ${b}-loaded-classes.jar ${b}-fused.jar
+	echo Finished fusion.
 	read
     done
 else
