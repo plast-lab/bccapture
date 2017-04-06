@@ -40,6 +40,13 @@ test_run_cafe:
 test_run_tradebeans:
 	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar tradebeans
 
+test_run_tradesoap:
+	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar tradesoap
+
 jar_tradebeans:
 	cp -Rf dacapo-bach/tradebeans-skeleton/* out/
 	jar cf tradebeans.jar -C out .
+
+jar_tradesoap:
+	cp -Rf dacapo-bach/tradebeans-skeleton/* out/
+	jar cf tradesoap.jar -C out .
