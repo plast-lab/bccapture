@@ -165,6 +165,7 @@ void print_bc(FILE* stream, const unsigned char c) {
   case 187: fprintf(stream, "new"); break;
   case 189: fprintf(stream, "anewarray"); break;
   case 191: fprintf(stream, "athrow"); break;
+  case 192: fprintf(stream, "checkcast"); break;
   case 193: fprintf(stream, "instanceof"); break;
   case 197: fprintf(stream, "multianewarray"); break;
   default:
