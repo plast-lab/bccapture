@@ -1,4 +1,5 @@
 AGENT_NAME=libBytecodeCapture
+MANIFEST=dacapo-bach/tradebeans-skeleton/META-INF/MANIFEST.MF
 JDK_INCLUDE?=/usr/lib/jvm/java-8-openjdk-amd64/include
 DOOP_BENCHMARKS?=/home/george/doop-benchmarks
 GDB=gdb -tui -args
@@ -45,8 +46,11 @@ test_run_tradesoap:
 
 jar_tradebeans:
 	cp -Rf dacapo-bach/tradebeans-skeleton/* out/
-	jar cf tradebeans.jar -C out .
+	jar cfm tradebeans-loaded-classes.jar ${MANIFEST} -C out .
 
 jar_tradesoap:
 	cp -Rf dacapo-bach/tradebeans-skeleton/* out/
-	jar cf tradesoap.jar -C out .
+	jar cfm tradesoap-loaded-classes.jar ${MANIFEST} -C out .
+
+jar_avrora:
+	jar cfm avrora-loaded-classes.jar ${MANIFEST} -C out .
