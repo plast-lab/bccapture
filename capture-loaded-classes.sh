@@ -15,14 +15,16 @@ function generateJar {
     jar cfm $1-loaded-classes.jar ${MANIFEST} -C out .
 }
 
-# dacap-bach choices:
+# dacap-bach choices (batik doesn't work):
 # avrora batik eclipse fop h2 jython luindex lusearch pmd sunflow tomcat tradebeans tradesoap xalan
 
 if [ "$1" == "" ]
 then
-    for b in avrora batik eclipse fop h2 jython luindex lusearch pmd sunflow tomcat tradebeans tradesoap xalan
+    for b in avrora eclipse fop h2 jython luindex lusearch pmd sunflow tomcat tradebeans tradesoap xalan
     do
 	generateJar $b
+	echo Finished capture.
+	read
     done
 else
     generateJar $1
