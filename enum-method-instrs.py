@@ -10,8 +10,11 @@
 # Main.main() at bytecode position 5, we run:
 #
 # ./enum-method-instrs.py Main.class 'main(java.lang.String[])' invokevirtual
-# ('bytecode index: 1', 'instr: invokevirtual/0')
-# ('bytecode index: 5', 'instr: invokevirtual/1')
+# ('bytecode index: 1', 'instr: invokevirtual/0', ...)
+# ('bytecode index: 5', 'instr: invokevirtual/1', ...)
+#
+# The third field of the last line is the Doop identifier for the
+# Jimple invoke instruction.
 #
 
 import sys
@@ -46,7 +49,17 @@ while (i < len(lines)):
                     instr = fields1[1]
                     if (instr.find(instrType) != -1):
                         bytecodeIdx = int(fields1[0])
-                        print('bytecode index: ' + str(bytecodeIdx), 'instr: ' + instrType + '/' + str(counter))
+                        instrId = instrType + '/' + str(counter)
+                        className = classFile.replace('.class', '').replace('/', '.')
+                        if (instrType == 'invokevirtual') or (instrType == 'invokestatic') or (instrType == 'invokespecial'):
+                            invokedMeth = instr.split('// Method ')[1].replace('/', '.')
+                        elif (instrType == 'invokeinterface'):
+                            invokedMeth = instr.split('// InterfaceMethod ')[1].replace('/', '.')
+                        else:
+                            print('TODO: ' + instrType + ' for ' + instr)
+                            sys.exit(-3)
+                        doopInstrId = '<' + className + ': ' + methodToSearch + '>/' + invokedMeth + '/' + str(counter)
+                        print('bytecode index: ' + str(bytecodeIdx), 'instr: ' + instrId, 'doop: ' + doopInstrId)
                         counter += 1
                     i += 1
                 else:
