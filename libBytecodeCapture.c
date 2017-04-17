@@ -86,7 +86,7 @@ int write_class(const char* name, const char* out_base_dir,
   char* class_file_name = alloca(class_file_name_len);
   int r = snprintf(class_file_name, class_file_name_len, "%s/%s.class", out_base_dir, name);
   if (r >= class_file_name_len) {
-    printf("Internal error: malformed class file name, wrote %d bytes (out of %ld)\n", r, class_file_name_len);
+    printf("Internal error: malformed class file name, wrote %d bytes (out of %zu)\n", r, class_file_name_len);
     exit(-1);
   } else if (access(class_file_name, F_OK) != -1) {
     // Output file already exists, check if its contents are the
@@ -95,7 +95,7 @@ int write_class(const char* name, const char* out_base_dir,
     fseek(existing, 0L, SEEK_END);
     size_t sz = ftell(existing);
     if (sz != class_data_len) {
-      fprintf(stderr, "File %s already exists, with different contents (different size: %ld vs. %d).\n",
+      fprintf(stderr, "File %s already exists, with different contents (different size: %zu vs. %d).\n",
               class_file_name, sz, class_data_len);
       return 2;
     }
@@ -113,7 +113,7 @@ int write_class(const char* name, const char* out_base_dir,
         return 1;
       }
       else {
-        fprintf(stderr, "File %s already exists, with different contents (first different byte @ pos %ld)\n", class_file_name, different_pos);
+        fprintf(stderr, "File %s already exists, with different contents (first different byte @ pos %zu)\n", class_file_name, different_pos);
         // exit(-1);
         return 2;
       }
@@ -206,7 +206,7 @@ void print_location(FILE* context_stream, jlocation location,
     fprintf(context_stream, "(unsupported location type) "); return;
   }
   else {
-    fprintf(context_stream, "(bytecode @ position %ld) ", location);
+    fprintf(context_stream, "(bytecode @ position %d) ", location);
     if (*read_bytecode) {
       count_bytecode_location(context_stream, location, method_id);
       *read_bytecode = 0;
@@ -248,7 +248,7 @@ FILE* choose_stdout_or_file(const char* class_name, const char* out_base_dir,
     char* info_file_name = alloca(info_file_name_len);
     int r = snprintf(info_file_name, info_file_name_len, "%s/%s.info", out_base_dir, class_name);
     if (r >= info_file_name_len) {
-      fprintf(stderr, "Internal error: malformed info file name, wrote %d bytes (out of %ld)\n", r, info_file_name_len);
+      fprintf(stderr, "Internal error: malformed info file name, wrote %d bytes (out of %zu)\n", r, info_file_name_len);
       exit(-1);
     }
     FILE* context_stream = fopen(info_file_name, "a");
