@@ -3,6 +3,8 @@ MANIFEST=dacapo-bach/tradebeans-skeleton/META-INF/MANIFEST.MF
 JDK_INCLUDE?=/usr/lib/jvm/java-8-openjdk-amd64/include
 DOOP_BENCHMARKS?=/home/george/doop-benchmarks
 GDB=gdb -tui -args
+ANDROID_NDK_TOOLCHAIN?=/home/george/Android/mytooldir-21/android-ndk-21/bin
+ANDROID_JVMTI_INCLUDE?=/home/george/Downloads/android/Android-sources-7.1/art/runtime/openjdkjvmti
 
 all: c_agent
 
@@ -14,6 +16,9 @@ all: c_agent
 
 c_agent: $(AGENT_NAME).c
 	gcc -std=c99 -g -shared -fPIC -Wall -o $(AGENT_NAME).so -I $(JDK_INCLUDE) -I $(JDK_INCLUDE)/linux -lpthread $(AGENT_NAME).c
+
+c_agent_android: $(AGENT_NAME).c
+	$(ANDROID_NDK_TOOLCHAIN)/arm-linux-androideabi-gcc -std=c99 -g -shared -fPIC -Wall -o $(AGENT_NAME).so -I $(ANDROID_JVMTI_INCLUDE) $(AGENT_NAME).c
 
 clean:
 	rm -f ClassLogger.o libBytecodeCapture.so libClassLogger.o libClassLogger.so Main.class some/package1/A.class
