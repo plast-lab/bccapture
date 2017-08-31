@@ -20,7 +20,6 @@ function capture {
 	echo Finished capture [${1}].
 	./fuse-jars.sh ${HOME}/doop-benchmarks/dacapo-bach/${1}.jar ${1}-loaded-classes.jar ${1}-fused.jar
 	echo Finished fusion.
-    echo Press ENTER to continue; read
 }
 
 # dacapo-bach choices (batik doesn't work and fop/tradesoap/tomcat are
@@ -33,6 +32,7 @@ then
     for b in avrora eclipse h2 jython luindex lusearch pmd sunflow tradebeans xalan
     do
         capture ${b}
+        echo Press ENTER to continue; read
     done
 else
     capture ${1}
