@@ -7,7 +7,7 @@ MANIFEST=dacapo-bach/tradebeans-skeleton/META-INF/MANIFEST.MF
 
 function generateJar {
     echo Generating JAR with loaded classes for $1
-    rm -rf out
+    rm -rf out scratch
     java -agentpath:./${AGENT_NAME}.so -jar dacapo-bach/dacapo-9.12-bach.jar $1 |& tee loaded-$1.txt
     # delete cglib code that crashes Soot
     find out -name "*CGLIB\$\$*" -exec rm {} \;
