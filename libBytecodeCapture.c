@@ -58,10 +58,10 @@ int starts_with(const char *pre, const char *str)
   return lenstr < lenpre ? 0 : strncmp(pre, str, lenpre) == 0;
 }
 
-// Given a directory name, this function calls 'mkdir -' to create it,
-// including all its parents.
+// Given a directory name, this function calls 'mkdir -p' to create
+// it, including all its parents.
 void make_dirs(const char* out_dir) {
-  // '11' is some extra space for "mkdir -p ".
+  // The constant is extra space for "mkdir -p ".
   int mkdir_cmd_len = strlen(out_dir) + 13;
   char* mkdir_cmd = alloca(mkdir_cmd_len);
   int r = snprintf(mkdir_cmd, mkdir_cmd_len, "mkdir -p '%s'", out_dir);
