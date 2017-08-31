@@ -15,6 +15,14 @@ function generateJar {
     jar cfm $1-loaded-classes.jar ${MANIFEST} -C out .
 }
 
+function capture {
+    generateJar ${1}
+	echo Finished capture [${1}].
+	./fuse-jars.sh ${HOME}/doop-benchmarks/dacapo-bach/${1}.jar ${1}-loaded-classes.jar ${1}-fused.jar
+	echo Finished fusion.
+    echo Press ENTER to continue; read
+}
+
 # dacapo-bach choices (batik doesn't work and fop/tradesoap/tomcat are
 # not in doop-benchmarks):
 #
@@ -24,12 +32,8 @@ if [ "$1" == "" ]
 then
     for b in avrora eclipse h2 jython luindex lusearch pmd sunflow tradebeans xalan
     do
-	generateJar ${b}
-	echo Finished capture [${b}].
-	./fuse-jars.sh ${HOME}/doop-benchmarks/dacapo-bach/${b}.jar ${b}-loaded-classes.jar ${b}-fused.jar
-	echo Finished fusion.
-	read
+        capture ${b}
     done
 else
-    generateJar $1
+    capture ${1}
 fi
