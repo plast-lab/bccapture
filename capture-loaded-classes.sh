@@ -26,7 +26,7 @@ then
     do
 	generateJar ${b}
 	echo Finished capture [${b}].
-	./fuse-jars.sh /home/gfour/doop-benchmarks/dacapo-bach/${b}.jar ${b}-loaded-classes.jar ${b}-fused.jar
+	./fuse-jars.sh ${HOME}/doop-benchmarks/dacapo-bach/${b}.jar ${b}-loaded-classes.jar ${b}-fused.jar
 	echo Finished fusion.
 	read
     done

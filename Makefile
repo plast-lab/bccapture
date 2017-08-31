@@ -1,10 +1,10 @@
 AGENT_NAME=libBytecodeCapture
 MANIFEST=dacapo-bach/tradebeans-skeleton/META-INF/MANIFEST.MF
 JDK_INCLUDE?=/usr/lib/jvm/java-8-openjdk-amd64/include
-DOOP_BENCHMARKS?=/home/george/doop-benchmarks
+DOOP_BENCHMARKS?=${HOME}/doop-benchmarks
 GDB=gdb -tui -args
-ANDROID_NDK_TOOLCHAIN?=/home/george/Android/mytooldir-21/android-ndk-21/bin
-ANDROID_JVMTI_INCLUDE?=/home/george/Downloads/android/Android-sources-7.1/art/runtime/openjdkjvmti
+ANDROID_NDK_TOOLCHAIN?=${HOME}/Android/mytooldir-21/android-ndk-21/bin
+ANDROID_JVMTI_INCLUDE?=${HOME}/Downloads/android/Android-sources-7.1/art/runtime/openjdkjvmti
 
 all: c_agent
 
