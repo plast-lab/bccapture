@@ -28,7 +28,6 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip>
-#include <sstream>
 #include <string>
 #include <map>
 
@@ -68,9 +67,8 @@ inline bool starts_with(const string search_str, const string s) {
 /** Given a directory name, this function calls 'mkdir -p' to create
     it, including all its parents. */
 void make_dirs(const string out_dir) {
-  stringstream mkdir_cmd;
-  mkdir_cmd << "mkdir -p '" << out_dir << "'";
-  system(mkdir_cmd.str().c_str());
+  string mkdir_cmd = "mkdir -p '" + out_dir + "'";
+  system(mkdir_cmd.c_str());
 }
 
 // Taken from https://stackoverflow.com/questions/12774207/fastest-way-to-check-if-a-file-exist-using-standard-c-c11-c
@@ -90,9 +88,7 @@ inline bool file_exists (const std::string& name) {
 int write_class(const string name, const string out_base_dir,
                 jint class_data_len, const unsigned char* class_data) {
 
-  stringstream class_file_name_s;
-  class_file_name_s << out_base_dir << "/" << name << ".class";
-  string class_file_name = class_file_name_s.str();
+  string class_file_name = out_base_dir + "/" + name + ".class";
   if (file_exists(class_file_name)) {
     // Output file already exists, check if its contents are the
     // same or we have another class with the same name.
@@ -298,9 +294,7 @@ ostream *choose_stdout_or_file(const string class_name, const string out_base_di
   if (file_mode == USE_STDOUT)
     return &cout;
   else {
-    stringstream ss;
-    ss << out_base_dir << "/" << class_name << ".info";
-    string info_file_name = ss.str();
+    string info_file_name = out_base_dir + "/" + class_name + ".info";
     ofstream *context_stream = new ofstream;
     context_stream->open(info_file_name, ios::app);
     return context_stream;
@@ -479,9 +473,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
   pthread_mutex_unlock(&stats_lock);
 
   int loader_hash = hash_code(env, loader);
-  stringstream ss;
-  ss << TOP_OUT_DIR << "/" << loader_hash;
-  string out_base_dir = ss.str();
+  string out_base_dir = TOP_OUT_DIR + "/" + to_string(loader_hash);
   string out_dir;
   OUTPUT_MODE file_mode = USE_FILE;
 
@@ -502,9 +494,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
     pthread_mutex_unlock(&stats_lock);
 
     cout << "Anonymous class #" << anonymous_class_counter << " found." << endl;
-    stringstream anon_name_s;
-    anon_name_s << "AnonGeneratedClass_" << anonymous_class_counter;
-    string anon_name = anon_name_s.str();
+    string anon_name = "AnonGeneratedClass_" + to_string(anonymous_class_counter);
     cout << "* Class name: " << anon_name << endl;
 
     record_class(env, anon_name, loader, loader_hash, out_base_dir, out_base_dir,
@@ -530,9 +520,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
     if (last_slash_pos != string::npos) {
       string package_name = name_s.substr(0, last_slash_pos);
       string extracted_name = name_s.substr(last_slash_pos + 1, string::npos);
-      stringstream out_ss;
-      out_ss << out_base_dir << "/" << package_name;
-      out_dir = out_ss.str();
+      out_dir = out_base_dir + "/" + package_name;
       cout << "Saving class " << name << " (package = " << package_name << ", name = " << extracted_name << ") under \"" << out_dir << "\"" << endl;
     }
     else {
