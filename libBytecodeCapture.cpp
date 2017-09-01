@@ -127,7 +127,7 @@ int write_class(const char* name, const char* out_base_dir,
       }
       else {
         cerr <<  "File " << class_file_name << " already exists, with different contents (first different byte @ pos " << different_pos << " )" << endl;
-        // exit(-1);
+        exit(-1);
         return 2;
       }
     }
