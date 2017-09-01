@@ -12,7 +12,11 @@ function generateJar {
     # delete cglib code that crashes Soot
     find out -name "*CGLIB\$\$*" -exec rm {} \;
     # make jar_$1
-    jar cfm $1-loaded-classes.jar ${MANIFEST} -C out .
+    CAPTURE_JAR=$1-loaded-classes.jar
+    jar cfm ${CAPTURE_JAR} ${MANIFEST} -C out .
+    echo Finished capture [$1].
+    ./fuse-jars.sh ${HOME}/doop-benchmarks/dacapo-bach/$1.jar ${CAPTURE_JAR} $1-fused.jar
+    echo Finished fusion.
 }
 
 function capture {
