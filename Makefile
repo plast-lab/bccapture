@@ -59,3 +59,6 @@ jar_tradesoap:
 
 jar_avrora:
 	jar cfm avrora-loaded-classes.jar ${MANIFEST} -C out .
+
+doc:
+	doxygen Doxyfile
