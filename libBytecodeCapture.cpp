@@ -33,6 +33,8 @@
 
 #include <jvmti.h>
 
+// Serialize the execution of this agent to account for concurrent
+// class loading.
 #define SERIALIZE 1
 
 static jvmtiEnv *jvmti = NULL;
