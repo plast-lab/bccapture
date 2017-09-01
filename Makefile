@@ -6,7 +6,7 @@ GDB=gdb -tui -args
 ANDROID_NDK_TOOLCHAIN?=${HOME}/Android/mytooldir-21/android-ndk-21/bin
 ANDROID_JVMTI_INCLUDE?=${HOME}/Downloads/android/Android-sources-7.1/art/runtime/openjdkjvmti
 
-all: c_agent
+all: agent
 
 # c_agent2: ClassLogger.c
 # 	gcc -g -shared -fPIC -c -o ClassLogger.o -I $(JDK_INCLUDE) -I $(JDK_INCLUDE)/linux ClassLogger.c
@@ -14,11 +14,11 @@ all: c_agent
 # test_run_example_classlogger_c_agent2: compile_example
 # 	java -agentpath:~/workspace/jvmti/libClassLogger.so Main
 
-c_agent: $(AGENT_NAME).c
-	gcc -std=c99 -g -shared -fPIC -Wall -o $(AGENT_NAME).so -I $(JDK_INCLUDE) -I $(JDK_INCLUDE)/linux -lpthread $(AGENT_NAME).c
+agent: $(AGENT_NAME).cpp
+	g++ -g -shared -fPIC -Wall -o $(AGENT_NAME).so -I $(JDK_INCLUDE) -I $(JDK_INCLUDE)/linux -lpthread $(AGENT_NAME).cpp
 
-c_agent_android: $(AGENT_NAME).c
-	$(ANDROID_NDK_TOOLCHAIN)/arm-linux-androideabi-gcc -std=c99 -g -shared -fPIC -Wall -o $(AGENT_NAME).so -I $(ANDROID_JVMTI_INCLUDE) $(AGENT_NAME).c
+agent_android: $(AGENT_NAME).cpp
+	$(ANDROID_NDK_TOOLCHAIN)/arm-linux-androideabi-g++ -g -shared -fPIC -Wall -o $(AGENT_NAME).so -I $(ANDROID_JVMTI_INCLUDE) $(AGENT_NAME).cpp
 
 clean:
 	rm -f ClassLogger.o libBytecodeCapture.so libClassLogger.o libClassLogger.so Main.class some/package1/A.class

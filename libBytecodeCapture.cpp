@@ -62,7 +62,7 @@ int starts_with(const char *pre, const char *str) {
 void make_dirs(const char* out_dir) {
   // The constant is extra space for "mkdir -p ".
   int mkdir_cmd_len = strlen(out_dir) + 13;
-  char* mkdir_cmd = alloca(mkdir_cmd_len);
+  char* mkdir_cmd = (char*)alloca(mkdir_cmd_len);
   int r = snprintf(mkdir_cmd, mkdir_cmd_len, "mkdir -p '%s'", out_dir);
   if (r >= mkdir_cmd_len) {
     fprintf(stderr, "Internal error: subdirectory name too long.\n");
@@ -82,9 +82,9 @@ int write_class(const char* name, const char* out_base_dir,
                 jint class_data_len, const unsigned char* class_data) {
   
   size_t class_file_name_len = strlen(out_base_dir) + 1 + strlen(name) + 7;
-  char* class_file_name = alloca(class_file_name_len);
+  char* class_file_name = (char*)alloca(class_file_name_len);
   int r = snprintf(class_file_name, class_file_name_len, "%s/%s.class", out_base_dir, name);
-  if (r >= class_file_name_len) {
+  if (r >= (int)class_file_name_len) {
     printf("Internal error: malformed class file name, wrote %d bytes (out of %zu)\n", r, class_file_name_len);
     exit(-1);
   } else if (access(class_file_name, F_OK) != -1) {
@@ -93,15 +93,15 @@ int write_class(const char* name, const char* out_base_dir,
     FILE* existing = fopen(class_file_name, "r");
     fseek(existing, 0L, SEEK_END);
     size_t sz = ftell(existing);
-    if (sz != class_data_len) {
+    if (sz != (size_t)class_data_len) {
       fprintf(stderr, "File %s already exists, with different contents (different size: %zu vs. %d).\n",
               class_file_name, sz, class_data_len);
       return 2;
     }
     else {
       rewind(existing);
-      size_t different_pos = -1;
-      for (size_t pos = 0; pos < class_data_len; pos++)
+      int different_pos = -1;
+      for (int pos = 0; pos < class_data_len; pos++)
         if (fgetc(existing) != class_data[pos]) {
           different_pos = pos;
           break;
@@ -112,7 +112,7 @@ int write_class(const char* name, const char* out_base_dir,
         return 1;
       }
       else {
-        fprintf(stderr, "File %s already exists, with different contents (first different byte @ pos %zu)\n", class_file_name, different_pos);
+        fprintf(stderr, "File %s already exists, with different contents (first different byte @ pos %d)\n", class_file_name, different_pos);
         // exit(-1);
         return 2;
       }
@@ -133,12 +133,12 @@ int write_class(const char* name, const char* out_base_dir,
 int hash_code(JNIEnv *env, const jobject obj) {
   if (!obj)
     return 0;
-  jclass klass = (*env)->GetObjectClass(env, obj);
+  jclass klass = env->GetObjectClass(obj);
   if (NULL == klass) {
     return 0;
   } else {
-    jmethodID hashCode_m = (*env)->GetMethodID(env, klass, "hashCode", "()I");
-    return (int)(*env)->CallIntMethod(env, obj, hashCode_m);
+    jmethodID hashCode_m = env->GetMethodID(klass, "hashCode", "()I");
+    return (int)env->CallIntMethod(obj, hashCode_m);
   }
 }
 
@@ -148,12 +148,12 @@ void print_classloader_info(FILE* context_stream, JNIEnv *env, const jobject loa
     fprintf(context_stream, "[Null classloader (bootstrap?)]\n");
   else {
     // Show information about the class loader.
-    jclass loader_class = (*env)->GetObjectClass(env, loader);
+    jclass loader_class = env->GetObjectClass(loader);
     if (loader_class == NULL)
       fprintf(context_stream, "[Error retrieving classloader %d (#1).]\n", loader_hash);
     else {
       char* loader_sig;
-      jvmtiError err = (*jvmti)->GetClassSignature(jvmti, loader_class, &loader_sig, NULL);
+      jvmtiError err = jvmti->GetClassSignature(loader_class, &loader_sig, NULL);
       if ((err == JVMTI_ERROR_NONE) && (loader_sig != NULL))
         fprintf(context_stream, "[classloader %d class: %s]\n", loader_hash, loader_sig);
       else
@@ -189,7 +189,7 @@ void count_bytecode_location(FILE* context_stream, jlocation location,
                              jmethodID method_id) {
   jint bytecode_count_ptr;
   unsigned char* bytecodes_ptr;
-  jvmtiError bc_err = (*jvmti)->GetBytecodes(jvmti, method_id, &bytecode_count_ptr, &bytecodes_ptr);
+  jvmtiError bc_err = jvmti->GetBytecodes(method_id, &bytecode_count_ptr, &bytecodes_ptr);
   if (bc_err == JVMTI_ERROR_NONE) {
     char bc = bytecodes_ptr[location];
 
@@ -210,7 +210,7 @@ void print_location(FILE* context_stream, const jlocation location,
   if (location == -1) {
     fprintf(context_stream, "(native method) "); return;
   }
-  jvmtiError err1 = (*jvmti)->GetJLocationFormat(jvmti, &locFormat);
+  jvmtiError err1 = jvmti->GetJLocationFormat(&locFormat);
   if (err1 != JVMTI_ERROR_NONE) {
     fprintf(context_stream, "(error reading location) "); return;
   }
@@ -226,7 +226,7 @@ void print_location(FILE* context_stream, const jlocation location,
 
     jint entry_count;
     jvmtiLineNumberEntry* table;
-    jvmtiError lines_err = (*jvmti)->GetLineNumberTable(jvmti, method_id, &entry_count, &table);
+    jvmtiError lines_err = jvmti->GetLineNumberTable(method_id, &entry_count, &table);
     if (lines_err == JVMTI_ERROR_NONE) {
       int before = 0, found = 0;
       for (int j = 0; j < entry_count; j++) {
@@ -257,9 +257,9 @@ FILE* choose_stdout_or_file(const char* class_name, const char* out_base_dir,
     return stdout;
   else {
     size_t info_file_name_len = strlen(out_dir) + 1 + strlen(class_name) + 7;
-    char* info_file_name = alloca(info_file_name_len);
+    char* info_file_name = (char*)alloca(info_file_name_len);
     int r = snprintf(info_file_name, info_file_name_len, "%s/%s.info", out_base_dir, class_name);
-    if (r >= info_file_name_len) {
+    if (r >= (int)info_file_name_len) {
       fprintf(stderr, "Internal error: malformed info file name, wrote %d bytes (out of %zu)\n", r, info_file_name_len);
       exit(-1);
     }
@@ -275,11 +275,11 @@ FILE* choose_stdout_or_file(const char* class_name, const char* out_base_dir,
 void print_declaring_class(FILE* context_stream, const jmethodID method_id) {
   // Find class that defines the method.
   jclass declaring_class;
-  jvmtiError err2 = (*jvmti)->GetMethodDeclaringClass(jvmti, method_id, &declaring_class);
+  jvmtiError err2 = jvmti->GetMethodDeclaringClass(method_id, &declaring_class);
   if (err2 == JVMTI_ERROR_NONE) {
     // Find class signature.
     char* class_sig;
-    jvmtiError err3 = (*jvmti)->GetClassSignature(jvmti, declaring_class, &class_sig, NULL);
+    jvmtiError err3 = jvmti->GetClassSignature(declaring_class, &class_sig, NULL);
     if ((err3 == JVMTI_ERROR_NONE) && (class_sig != NULL))
       fprintf(context_stream, "[declaring class: %s]", class_sig);
     else
@@ -307,8 +307,8 @@ void write_exec_context(JNIEnv *env, const char* class_name,
   int du = defined_by_unknown;
   int dm = defined_missing;
 
-  jvmtiError err = (*jvmti)->GetStackTrace(jvmti, current_thread, 0,
-                                           max_frame_count, frames, &count);
+  jvmtiError err = jvmti->GetStackTrace(current_thread, 0,
+                                        max_frame_count, frames, &count);
   if (err != JVMTI_ERROR_NONE) {
     fprintf(context_stream, "[error reading stack trace]");
     fflush(context_stream);
@@ -322,8 +322,7 @@ void write_exec_context(JNIEnv *env, const char* class_name,
       jmethodID method_id = frames[i].method;
       jlocation location = frames[i].location;
       char* method_sig;
-      err = (*jvmti)->GetMethodName(jvmti, method_id,
-                                    &method_name, NULL, &method_sig);
+      err = jvmti->GetMethodName(method_id, &method_name, NULL, &method_sig);
       if (err != JVMTI_ERROR_NONE) {
         defined_by_unknown++;
       } else {
@@ -387,17 +386,17 @@ void write_exec_context(JNIEnv *env, const char* class_name,
 void printLoadedClasses(FILE* context_stream) {
   jint class_count;
   jclass* classes;
-  jvmtiError err0 = (*jvmti)->GetLoadedClasses(jvmti, &class_count, &classes);
+  jvmtiError err0 = jvmti->GetLoadedClasses(&class_count, &classes);
   if (err0 == JVMTI_ERROR_NONE) {
     fprintf(context_stream, "%d loaded classes.\n", class_count);
     for (int i=0; i<class_count; i++) {
       // Find class signature.
       char* class_sig;
-      jvmtiError err1 = (*jvmti)->GetClassSignature(jvmti, classes[i], &class_sig, NULL);
+      jvmtiError err1 = jvmti->GetClassSignature(classes[i], &class_sig, NULL);
       if ((err1 == JVMTI_ERROR_NONE) && (class_sig != NULL)) {
         jint field_count;
         jfieldID* fields;
-        jvmtiError err2 = (*jvmti)->GetClassFields(jvmti, classes[i], &field_count, &fields);
+        jvmtiError err2 = jvmti->GetClassFields(classes[i], &field_count, &fields);
         if (err2 == JVMTI_ERROR_NONE)
           fprintf(context_stream, "[class: %s (%d fields)]\n", class_sig, field_count);
         else
@@ -441,7 +440,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
 
   int loader_hash = hash_code(env, loader);
   size_t out_base_dir_len = 22;
-  char* out_base_dir = alloca(out_base_dir_len);
+  char* out_base_dir = (char*)alloca(out_base_dir_len);
   snprintf(out_base_dir, out_base_dir_len, "out/%d", loader_hash);
   char* out_dir;
   int file_mode = USE_FILE;
@@ -464,7 +463,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
 
     printf("Anonymous class #%d found.\n", anonymous_class_counter);
     const int anon_name_len = 40;
-    char* anon_name = calloc(anon_name_len, 1);
+    char* anon_name = (char*)calloc(anon_name_len, 1);
     int r = snprintf(anon_name, anon_name_len, "AnonGeneratedClass_%d", anonymous_class_counter);
     if (r >= anon_name_len) {
       fprintf(stderr, "Internal error: too long auto-generated name for anonymous class.");
@@ -490,15 +489,15 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
 
     // If the fully qualified class name contains '/', it contains a
     // package prefix -- create here a subdirectory for it.
-    char* lastSlash = strrchr(name, '/');
+    const char* lastSlash = strrchr(name, '/');
     if (lastSlash != 0) {
       size_t package_name_len = lastSlash - name;
-      char* package_name = alloca(package_name_len + 1);
+      char* package_name = (char*)alloca(package_name_len + 1);
       memcpy(package_name, name, package_name_len);
       package_name[package_name_len] = '\0';
 
       int out_dir_len = out_base_dir_len + package_name_len + 2;
-      out_dir = alloca(out_dir_len);
+      out_dir = (char*)alloca(out_dir_len);
       snprintf(out_dir, out_dir_len, "%s/%s", out_base_dir, package_name);
       printf("Saving class %s (package = %s, name = %s) under \"%s\"\n", name, package_name, &lastSlash[1], out_dir);
     }
@@ -558,7 +557,7 @@ static jint init_options(char *options) {
 static jint Agent_Initialize(JavaVM *jvm, char *options, void *reserved) {
   int rc;
 
-  if ((rc = (*jvm)->GetEnv(jvm, (void **)&jvmti, JVMTI_VERSION_1_2)) != JNI_OK) {
+  if ((rc = jvm->GetEnv((void **)&jvmti, JVMTI_VERSION_1_2)) != JNI_OK) {
     fprintf(stderr, "Unable to create jvmtiEnv, GetEnv failed, error = %d\n", rc);
     return JNI_ERR;
   }
@@ -568,13 +567,13 @@ static jint Agent_Initialize(JavaVM *jvm, char *options, void *reserved) {
 
   (void) memset(&callbacks, 0, sizeof(callbacks));
   callbacks.ClassFileLoadHook = &ClassFileLoadHook;
-  if ((rc = (*jvmti)->SetEventCallbacks(jvmti, &callbacks, sizeof(callbacks))) != JNI_OK) {
+  if ((rc = jvmti->SetEventCallbacks(&callbacks, sizeof(callbacks))) != JNI_OK) {
     fprintf(stderr, "SetEventCallbacks failed, error = %d\n", rc);
     return JNI_ERR;
   }
 
-  if ((rc = (*jvmti)->SetEventNotificationMode(jvmti, JVMTI_ENABLE,
-                                               JVMTI_EVENT_CLASS_FILE_LOAD_HOOK, NULL)) != JNI_OK) {
+  if ((rc = jvmti->SetEventNotificationMode(JVMTI_ENABLE,
+                                            JVMTI_EVENT_CLASS_FILE_LOAD_HOOK, NULL)) != JNI_OK) {
     fprintf(stderr, "SetEventNotificationMode failed, error = %d\n", rc);
     return JNI_ERR;
   }
@@ -584,7 +583,7 @@ static jint Agent_Initialize(JavaVM *jvm, char *options, void *reserved) {
   caps.can_get_line_numbers = 1;
   caps.can_get_constant_pool = 1;
 
-  jvmtiError caps_err = (*jvmti)->AddCapabilities(jvmti, &caps);
+  jvmtiError caps_err = jvmti->AddCapabilities(&caps);
   if (caps_err == JVMTI_ERROR_NONE) {
   }
   else
