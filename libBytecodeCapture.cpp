@@ -29,6 +29,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
@@ -66,7 +67,7 @@ int starts_with(const char *pre, const char *str) {
 
 // Given a directory name, this function calls 'mkdir -p' to create
 // it, including all its parents.
-void make_dirs(const char* out_dir) {
+void make_dirs(const string out_dir) {
   stringstream mkdir_cmd;
   mkdir_cmd << "mkdir -p '" << out_dir << "'";
   system(mkdir_cmd.str().c_str());
@@ -85,7 +86,7 @@ inline bool file_exists (const std::string& name) {
 //
 // Returns 0 if the class was saved, 1 if the same class has already
 // been saved, 2 if another class with the same name was saved.
-int write_class(const char* name, const char* out_base_dir,
+int write_class(const char* name, const string out_base_dir,
                 jint class_data_len, const unsigned char* class_data) {
 
   stringstream class_file_name_s;
@@ -269,8 +270,8 @@ void print_location(ostream* context_stream, const jlocation location,
   }
 }
 
-ostream *choose_stdout_or_file(const char* class_name, const char* out_base_dir,
-                               const char* out_dir, const int file_mode) {
+ostream *choose_stdout_or_file(const char* class_name, const string out_base_dir,
+                               const string out_dir, const int file_mode) {
   if (file_mode == USE_STDOUT)
     return &cout;
   else {
@@ -303,7 +304,7 @@ void print_declaring_class(ostream* context_stream, const jmethodID method_id) {
 // Reads the stack and finds the innermost method.
 void write_exec_context(JNIEnv *env, const char* class_name,
                         const jobject loader, const int loader_hash,
-                        const char* out_base_dir, const char* out_dir,
+                        const string out_base_dir, const string out_dir,
                         const int file_mode) {
   const jint max_frame_count = 47;
   jvmtiFrameInfo* frames = (jvmtiFrameInfo*)calloc(max_frame_count, sizeof(jvmtiFrameInfo));
@@ -338,7 +339,7 @@ void write_exec_context(JNIEnv *env, const char* class_name,
         defined_by_unknown++;
       } else {
         *context_stream << "{ Frame " << i << ": ";
-        // fprintf(context_stream, "Class %s loaded while executing method: %s\n", class_name, method_name);
+        // *context_stream << "Class " << class_name << " loaded while executing method: " << method_name << endl;
         *context_stream << "* In method: " << method_name << " (signature: " <<
                            (method_sig == NULL? "no signature" : method_sig) << ") " << endl;
         // Check topmost method to see if this class is a truly
@@ -383,8 +384,11 @@ void write_exec_context(JNIEnv *env, const char* class_name,
   int sum_before = dm + du + dc + dac;
   int sum_after = defined_missing + defined_by_unknown + defined_by_defineClass + defined_by_defineAnonymousClass;
   if ((sum_before + 1) != (sum_after)) {
-    fprintf(stderr, "[Class stats check failed: diffs: %d, %d, %d, %d] ", defined_missing - dm,
-            defined_by_unknown - du, defined_by_defineClass - dc, defined_by_defineAnonymousClass - dac);
+    cerr << "[Class stats check failed: diffs: " <<
+      defined_missing - dm << ", " <<
+      defined_by_unknown - du << ", " <<
+      defined_by_defineClass - dc << ", " <<
+      defined_by_defineAnonymousClass - dac << "] ";
   }
 
   print_classloader_info(context_stream, env, loader, loader_hash);
@@ -425,8 +429,8 @@ void printLoadedClasses(ostream* context_stream) {
 }
 
 void record_class(JNIEnv *env, const char* class_name, const jobject loader,
-                  const int loader_hash, const char* out_base_dir,
-                  const char* out_dir, const int file_mode,
+                  const int loader_hash, const string out_base_dir,
+                  const string out_dir, const int file_mode,
                   jint class_data_len, const unsigned char* class_data) {
   make_dirs(out_dir);
   write_class(class_name, out_base_dir, class_data_len, class_data);
@@ -452,17 +456,17 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
   pthread_mutex_unlock(&stats_lock);
 
   int loader_hash = hash_code(env, loader);
-  size_t out_base_dir_len = 22;
-  char* out_base_dir = (char*)alloca(out_base_dir_len);
-  snprintf(out_base_dir, out_base_dir_len, "out/%d", loader_hash);
-  char* out_dir;
+  stringstream ss;
+  ss << "out/" << loader_hash;
+  string out_base_dir = ss.str();
+  string out_dir;
   int file_mode = USE_FILE;
 
   // This failure is mostly for diagnostic reasons. If we remove this
   // check, we may end up with same-name classes, as in the case of
   // the anonymous lambda classes.
   if (class_being_redefined != NULL) {
-    fprintf(stderr, "Class redefinition is currently not suported.\n");
+    cerr << "Class redefinition is currently not suported." << endl;
     exit(-1);
   }
 
@@ -474,15 +478,15 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
     anonymous_class_counter++;
     pthread_mutex_unlock(&stats_lock);
 
-    printf("Anonymous class #%d found.\n", anonymous_class_counter);
+    cout << "Anonymous class #" << anonymous_class_counter << " found." << endl;
     const int anon_name_len = 40;
     char* anon_name = (char*)calloc(anon_name_len, 1);
     int r = snprintf(anon_name, anon_name_len, "AnonGeneratedClass_%d", anonymous_class_counter);
     if (r >= anon_name_len) {
-      fprintf(stderr, "Internal error: too long auto-generated name for anonymous class.");
+      cerr << "Internal error: too long auto-generated name for anonymous class.";
       exit(-1);
     }
-    printf("* Class name: %s\n", anon_name);
+    cout << "* Class name: " << anon_name << endl;
 
     record_class(env, anon_name, loader, loader_hash, out_base_dir, out_base_dir,
                  file_mode, class_data_len, class_data);
@@ -491,7 +495,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
     // Ignore built-in classes.
     int builtIn = starts_with("java/", name) || starts_with("javax/", name) || starts_with("com/sun", name) || starts_with("sun/", name) || starts_with("jdk/", name);
     if (builtIn) {
-      // printf("Ignoring built-in class: %s\n", name);
+      // cout << "Ignoring built-in class: " << name << endl;
 
       pthread_mutex_lock(&stats_lock);
       defined_but_ignored++;
@@ -509,14 +513,14 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
       memcpy(package_name, name, package_name_len);
       package_name[package_name_len] = '\0';
 
-      int out_dir_len = out_base_dir_len + package_name_len + 2;
-      out_dir = (char*)alloca(out_dir_len);
-      snprintf(out_dir, out_dir_len, "%s/%s", out_base_dir, package_name);
-      printf("Saving class %s (package = %s, name = %s) under \"%s\"\n", name, package_name, &lastSlash[1], out_dir);
+      stringstream out_ss;
+      out_ss << out_base_dir << "/" << package_name;
+      out_dir = out_ss.str();
+      cout << "Saving class " << name << " (package = " << package_name << ", name = " << &lastSlash[1] << ") under \"" << out_dir << "\"" << endl;
     }
     else {
       out_dir = out_base_dir;
-      printf("Saving class %s under \"%s\"\n", name, out_dir);
+      cout << "Saving class " << name << " under \"" << out_dir << "\"" << endl;
     }
 
     record_class(env, name, loader, loader_hash, out_base_dir, out_dir, file_mode,
@@ -571,7 +575,7 @@ static jint Agent_Initialize(JavaVM *jvm, char *options, void *reserved) {
   int rc;
 
   if ((rc = jvm->GetEnv((void **)&jvmti, JVMTI_VERSION_1_2)) != JNI_OK) {
-    fprintf(stderr, "Unable to create jvmtiEnv, GetEnv failed, error = %d\n", rc);
+    cerr << "Unable to create jvmtiEnv, GetEnv failed, error = " << rc << endl;
     return JNI_ERR;
   }
   /* if ((rc = init_options(options)) != JNI_OK) { */
@@ -581,13 +585,13 @@ static jint Agent_Initialize(JavaVM *jvm, char *options, void *reserved) {
   (void) memset(&callbacks, 0, sizeof(callbacks));
   callbacks.ClassFileLoadHook = &ClassFileLoadHook;
   if ((rc = jvmti->SetEventCallbacks(&callbacks, sizeof(callbacks))) != JNI_OK) {
-    fprintf(stderr, "SetEventCallbacks failed, error = %d\n", rc);
+    cerr << "SetEventCallbacks failed, error = " << rc << endl;
     return JNI_ERR;
   }
 
   if ((rc = jvmti->SetEventNotificationMode(JVMTI_ENABLE,
                                             JVMTI_EVENT_CLASS_FILE_LOAD_HOOK, NULL)) != JNI_OK) {
-    fprintf(stderr, "SetEventNotificationMode failed, error = %d\n", rc);
+    cerr << "SetEventNotificationMode failed, error = " << rc << endl;
     return JNI_ERR;
   }
 
@@ -600,7 +604,7 @@ static jint Agent_Initialize(JavaVM *jvm, char *options, void *reserved) {
   if (caps_err == JVMTI_ERROR_NONE) {
   }
   else
-    printf("Capabilities could not be set, some functionality may be missing.\n");
+    cout << "Capabilities could not be set, some functionality may be missing." << endl;
 
   for (int i = 0; i < 256; i++)
     bytecodes[i] = 0;
@@ -615,7 +619,7 @@ static jint Agent_Initialize(JavaVM *jvm, char *options, void *reserved) {
 }
 
 JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM *jvm, char *options, void *reserved) {
-  printf("Selecting extra capabilities...\n");
+  cout << "Selecting extra capabilities..." << endl;
 
   return Agent_Initialize(jvm, options, reserved);
 }
@@ -625,26 +629,28 @@ JNIEXPORT jint JNICALL Agent_OnAttach(JavaVM *jvm, char *options, void *reserved
 }
 
 JNIEXPORT void JNICALL Agent_OnUnload(JavaVM *vm) {
-  fprintf(stderr, "Agent terminates.\n");
+  cerr << "Agent terminates." << endl;
 
-  fprintf(stderr, "Classes defined: %d\n", defined_sum);
-  fprintf(stderr, "Classes defined (ignored): %d\n", defined_but_ignored);
-  fprintf(stderr, "Classes defined by unknown code (stack trace error or empty): %d\n", defined_by_unknown);
-  fprintf(stderr, "Classes defined by defineClass(): %d\n", defined_by_defineClass);
-  fprintf(stderr, "Classes defined by defineAnonymousClass(): %d\n", defined_by_defineAnonymousClass);
+  cerr << "Classes defined: " << defined_sum << endl;
+  cerr << "Classes defined (ignored): " << defined_but_ignored << endl;
+  cerr << "Classes defined by unknown code (stack trace error or empty): " << defined_by_unknown << endl;
+  cerr << "Classes defined by defineClass(): " << defined_by_defineClass << endl;
+  cerr << "Classes defined by defineAnonymousClass(): " << defined_by_defineAnonymousClass << endl;
 
-  fprintf(stderr, "Classes in other methods: %d\n", defined_missing);
-  fprintf(stderr, "  Bytecode frequencies in call sites:\n");
+  cerr << "Classes in other methods: " << defined_missing << endl;
+  cerr << "  Bytecode frequencies in call sites:" << endl;
   int bytecodes_sum = 0;
   int count = 1;
+  cerr << setprecision(3);
   for (int i = 0; i < 256; i++)
     if (bytecodes[i] != 0) {
-      fprintf(stderr, "  %3d ", count++);
+      cerr << "  " << (count++) << " ";
       print_bc(&cerr, (unsigned char)i);
-      fprintf(stderr, " = %d\n", bytecodes[i]);
+      cerr << " = " << bytecodes[i] << endl;
       bytecodes_sum += bytecodes[i];
     }
-  fprintf(stderr, "  Bytecodes sum = %d\n", bytecodes_sum);
+  cerr << "  Bytecodes sum = " << bytecodes_sum << endl;
 
-  fprintf(stderr, "Uncounted classes: %d\n", defined_sum - (defined_but_ignored + defined_by_unknown + defined_by_defineClass + defined_by_defineAnonymousClass + defined_missing));
+  int uncounted = defined_sum - (defined_but_ignored + defined_by_unknown + defined_by_defineClass + defined_by_defineAnonymousClass + defined_missing);
+  cerr << "Uncounted classes: " << uncounted << endl;
 }
