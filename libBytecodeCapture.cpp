@@ -53,8 +53,7 @@ static int defined_but_ignored;
 
 // Flags to control output in standard output (slow, must be
 // serialized) or files (async).
-const int USE_STDOUT = 0;
-const int USE_FILE = 1;
+enum OUTPUT_MODE { USE_STDOUT, USE_FILE };
 
 using namespace std;
 
@@ -457,7 +456,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
   ss << "out/" << loader_hash;
   string out_base_dir = ss.str();
   string out_dir;
-  int file_mode = USE_FILE;
+  OUTPUT_MODE file_mode = USE_FILE;
 
   // This failure is mostly for diagnostic reasons. If we remove this
   // check, we may end up with same-name classes, as in the case of
