@@ -543,17 +543,18 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
 void write_loaders() {
   ofstream loaders_file;
   loaders_file.open(TOP_OUT_DIR + "/loaders.json", ios::out);
-  loaders_file << "[";
+  loaders_file << "[ ";
   cout << "Classloaders:" << endl;
   for (auto it = loaders.begin(); it != loaders.end(); ++it) {
     if (it != loaders.begin())
-      loaders_file << ", ";
+      loaders_file << "," << endl << "  ";
+
     int l_hash = it->first;
     string l_name = it->second;
     cout << " * " << l_name << " (hashCode() = " << l_hash << ")" << endl;
     loaders_file << "{ loaderName : '" << l_name << "', loaderHash : '" << l_hash << "' }";
   }
-  loaders_file << "]";
+  loaders_file << endl << "]" << endl;
   loaders_file.close();
 }
 
