@@ -21,18 +21,15 @@
  * questions.
  */
 
-#include <stdlib.h>
 #include <string.h>
-#include <alloca.h>
 #include <pthread.h>
-#include <unistd.h>
+#include <sys/stat.h>
 
 #include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <string>
-#include <sys/stat.h>
 
 #include <jvmti.h>
 
@@ -59,10 +56,8 @@ const int USE_FILE = 1;
 
 using namespace std;
 
-// From http://stackoverflow.com/questions/4770985/how-to-check-if-a-string-starts-with-another-string-in-c
-int starts_with(const char *pre, const char *str) {
-  size_t lenpre = strlen(pre), lenstr = strlen(str);
-  return lenstr < lenpre ? 0 : strncmp(pre, str, lenpre) == 0;
+inline bool starts_with(const string search_str, const string s) {
+  return (s.substr(0, search_str.size()) == search_str);
 }
 
 // Given a directory name, this function calls 'mkdir -p' to create
@@ -86,7 +81,7 @@ inline bool file_exists (const std::string& name) {
 //
 // Returns 0 if the class was saved, 1 if the same class has already
 // been saved, 2 if another class with the same name was saved.
-int write_class(const char* name, const string out_base_dir,
+int write_class(const string name, const string out_base_dir,
                 jint class_data_len, const unsigned char* class_data) {
 
   stringstream class_file_name_s;
@@ -270,7 +265,7 @@ void print_location(ostream* context_stream, const jlocation location,
   }
 }
 
-ostream *choose_stdout_or_file(const char* class_name, const string out_base_dir,
+ostream *choose_stdout_or_file(const string class_name, const string out_base_dir,
                                const string out_dir, const int file_mode) {
   if (file_mode == USE_STDOUT)
     return &cout;
@@ -302,12 +297,12 @@ void print_declaring_class(ostream* context_stream, const jmethodID method_id) {
 }
 
 // Reads the stack and finds the innermost method.
-void write_exec_context(JNIEnv *env, const char* class_name,
+void write_exec_context(JNIEnv *env, const string class_name,
                         const jobject loader, const int loader_hash,
                         const string out_base_dir, const string out_dir,
                         const int file_mode) {
   const jint max_frame_count = 47;
-  jvmtiFrameInfo* frames = (jvmtiFrameInfo*)calloc(max_frame_count, sizeof(jvmtiFrameInfo));
+  jvmtiFrameInfo* frames = new jvmtiFrameInfo[max_frame_count];
   jint count;
   jthread current_thread = NULL;
   ostream *context_stream = choose_stdout_or_file(class_name, out_base_dir, out_dir, file_mode);
@@ -428,7 +423,7 @@ void printLoadedClasses(ostream* context_stream) {
   }
 }
 
-void record_class(JNIEnv *env, const char* class_name, const jobject loader,
+void record_class(JNIEnv *env, const string class_name, const jobject loader,
                   const int loader_hash, const string out_base_dir,
                   const string out_dir, const int file_mode,
                   jint class_data_len, const unsigned char* class_data) {
@@ -479,19 +474,16 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
     pthread_mutex_unlock(&stats_lock);
 
     cout << "Anonymous class #" << anonymous_class_counter << " found." << endl;
-    const int anon_name_len = 40;
-    char* anon_name = (char*)calloc(anon_name_len, 1);
-    int r = snprintf(anon_name, anon_name_len, "AnonGeneratedClass_%d", anonymous_class_counter);
-    if (r >= anon_name_len) {
-      cerr << "Internal error: too long auto-generated name for anonymous class.";
-      exit(-1);
-    }
+    stringstream anon_name_s;
+    anon_name_s << "AnonGeneratedClass_" << anonymous_class_counter;
+    string anon_name = anon_name_s.str();
     cout << "* Class name: " << anon_name << endl;
 
     record_class(env, anon_name, loader, loader_hash, out_base_dir, out_base_dir,
                  file_mode, class_data_len, class_data);
   }
   else {
+    string name_s(name);
     // Ignore built-in classes.
     int builtIn = starts_with("java/", name) || starts_with("javax/", name) || starts_with("com/sun", name) || starts_with("sun/", name) || starts_with("jdk/", name);
     if (builtIn) {
@@ -506,17 +498,14 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
 
     // If the fully qualified class name contains '/', it contains a
     // package prefix -- create here a subdirectory for it.
-    const char* lastSlash = strrchr(name, '/');
-    if (lastSlash != 0) {
-      size_t package_name_len = lastSlash - name;
-      char* package_name = (char*)alloca(package_name_len + 1);
-      memcpy(package_name, name, package_name_len);
-      package_name[package_name_len] = '\0';
-
+    size_t last_slash_pos = name_s.find_last_of('/');
+    if (last_slash_pos != string::npos) {
+      string package_name = name_s.substr(0, last_slash_pos);
+      string extracted_name = name_s.substr(last_slash_pos + 1, string::npos);
       stringstream out_ss;
       out_ss << out_base_dir << "/" << package_name;
       out_dir = out_ss.str();
-      cout << "Saving class " << name << " (package = " << package_name << ", name = " << &lastSlash[1] << ") under \"" << out_dir << "\"" << endl;
+      cout << "Saving class " << name << " (package = " << package_name << ", name = " << extracted_name << ") under \"" << out_dir << "\"" << endl;
     }
     else {
       out_dir = out_base_dir;
