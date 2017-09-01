@@ -33,8 +33,8 @@
 
 #include <jvmti.h>
 
-// Serialize the execution of this agent to account for concurrent
-// class loading.
+/** Serialize the execution of this agent to account for concurrent
+    class loading. */
 #define SERIALIZE 1
 
 static jvmtiEnv *jvmti = NULL;
@@ -51,8 +51,8 @@ static int defined_by_unknown;
 static int defined_missing;
 static int defined_but_ignored;
 
-// Flags to control output in standard output (slow, must be
-// serialized) or files (async).
+/** Flags to control output in standard output (slow, must be
+    serialized) or files (async). */
 enum OUTPUT_MODE { USE_STDOUT, USE_FILE };
 
 using namespace std;
@@ -61,8 +61,8 @@ inline bool starts_with(const string search_str, const string s) {
   return (s.substr(0, search_str.size()) == search_str);
 }
 
-// Given a directory name, this function calls 'mkdir -p' to create
-// it, including all its parents.
+/** Given a directory name, this function calls 'mkdir -p' to create
+    it, including all its parents. */
 void make_dirs(const string out_dir) {
   stringstream mkdir_cmd;
   mkdir_cmd << "mkdir -p '" << out_dir << "'";
@@ -75,13 +75,14 @@ inline bool file_exists (const std::string& name) {
   return (stat (name.c_str(), &buffer) == 0);
 }
 
-// Writes a bytecode data stream to a file. Takes the fully-qualifed
-// name of the class (e.g. 'package1/package2/C'), the base output
-// directory (e.g. 'out'), the full output dir for the target class,
-// the length of the class data, and the class data byte array.
-//
-// Returns 0 if the class was saved, 1 if the same class has already
-// been saved, 2 if another class with the same name was saved.
+/** Writes a bytecode data stream to a file. Takes the fully-qualifed
+    name of the class (e.g. 'package1/package2/C'), the base output
+    directory (e.g. 'out'), the full output dir for the target class,
+    the length of the class data, and the class data byte array.
+
+    Returns 0 if the class was saved, 1 if the same class has already
+    been saved, 2 if another class with the same name was saved.
+ */
 int write_class(const string name, const string out_base_dir,
                 jint class_data_len, const unsigned char* class_data) {
 
@@ -141,7 +142,7 @@ int write_class(const string name, const string out_base_dir,
   return 0;
 }
 
-// Call hashCode() method on Java object.
+/** Call hashCode() method on Java object. */
 int hash_code(JNIEnv *env, const jobject obj) {
   if (!obj)
     return 0;
@@ -175,7 +176,7 @@ void print_classloader_info(ostream* context_stream, JNIEnv *env,
   context_stream->flush();
 }
 
-// Test disassembler of selected bytecode instructions.
+/** Test disassembler of selected bytecode instructions. */
 void print_bc(ostream* stream, const unsigned char c) {
   switch (c) {
   case  18: *stream << "ldc"            ; break;
@@ -297,7 +298,7 @@ void print_declaring_class(ostream* context_stream, const jmethodID method_id) {
     *context_stream << "[declaring class not found (err2).]";
 }
 
-// Reads the stack and finds the innermost method.
+/** Reads the stack and finds the innermost method. */
 void write_exec_context(JNIEnv *env, const string class_name,
                         const jobject loader, const int loader_hash,
                         const string out_base_dir, const string out_dir,
@@ -434,8 +435,8 @@ void record_class(JNIEnv *env, const string class_name, const jobject loader,
                      out_dir, file_mode);
 }
 
-/* The hook that instruments class loading and captures all generated
-   bytecode. */
+/** The hook that instruments class loading and captures all generated
+    bytecode. */
 void JNICALL
 ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined,
         jobject loader, const char* name, jobject protection_domain,
