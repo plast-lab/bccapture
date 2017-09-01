@@ -21,12 +21,17 @@
  * questions.
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <alloca.h>
 #include <pthread.h>
 #include <unistd.h>
+
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <sys/stat.h>
 
 #include <jvmti.h>
 
@@ -51,6 +56,8 @@ static int defined_but_ignored;
 const int USE_STDOUT = 0;
 const int USE_FILE = 1;
 
+using namespace std;
+
 // From http://stackoverflow.com/questions/4770985/how-to-check-if-a-string-starts-with-another-string-in-c
 int starts_with(const char *pre, const char *str) {
   size_t lenpre = strlen(pre), lenstr = strlen(str);
@@ -60,15 +67,15 @@ int starts_with(const char *pre, const char *str) {
 // Given a directory name, this function calls 'mkdir -p' to create
 // it, including all its parents.
 void make_dirs(const char* out_dir) {
-  // The constant is extra space for "mkdir -p ".
-  int mkdir_cmd_len = strlen(out_dir) + 13;
-  char* mkdir_cmd = (char*)alloca(mkdir_cmd_len);
-  int r = snprintf(mkdir_cmd, mkdir_cmd_len, "mkdir -p '%s'", out_dir);
-  if (r >= mkdir_cmd_len) {
-    fprintf(stderr, "Internal error: subdirectory name too long.\n");
-    exit(-1);
-  }
-  system(mkdir_cmd);
+  stringstream mkdir_cmd;
+  mkdir_cmd << "mkdir -p '" << out_dir << "'";
+  system(mkdir_cmd.str().c_str());
+}
+
+// Taken from https://stackoverflow.com/questions/12774207/fastest-way-to-check-if-a-file-exist-using-standard-c-c11-c
+inline bool file_exists (const std::string& name) {
+  struct stat buffer;
+  return (stat (name.c_str(), &buffer) == 0);
 }
 
 // Writes a bytecode data stream to a file. Takes the fully-qualifed
@@ -80,39 +87,46 @@ void make_dirs(const char* out_dir) {
 // been saved, 2 if another class with the same name was saved.
 int write_class(const char* name, const char* out_base_dir,
                 jint class_data_len, const unsigned char* class_data) {
-  
-  size_t class_file_name_len = strlen(out_base_dir) + 1 + strlen(name) + 7;
-  char* class_file_name = (char*)alloca(class_file_name_len);
-  int r = snprintf(class_file_name, class_file_name_len, "%s/%s.class", out_base_dir, name);
-  if (r >= (int)class_file_name_len) {
-    printf("Internal error: malformed class file name, wrote %d bytes (out of %zu)\n", r, class_file_name_len);
-    exit(-1);
-  } else if (access(class_file_name, F_OK) != -1) {
+
+  stringstream class_file_name_s;
+  class_file_name_s << out_base_dir << "/" << name << ".class";
+  string class_file_name = class_file_name_s.str();
+  cout << "Test: " << class_file_name << " vs. " << class_file_name.c_str();
+  if (file_exists(class_file_name)) {
     // Output file already exists, check if its contents are the
     // same or we have another class with the same name.
-    FILE* existing = fopen(class_file_name, "r");
-    fseek(existing, 0L, SEEK_END);
-    size_t sz = ftell(existing);
-    if (sz != (size_t)class_data_len) {
-      fprintf(stderr, "File %s already exists, with different contents (different size: %zu vs. %d).\n",
-              class_file_name, sz, class_data_len);
+    // FILE* existing = fopen(class_file_name, "r");
+    ifstream existing;
+    existing.open(class_file_name, ios::in | ios::binary);
+    // fseek(existing, 0L, SEEK_END);
+    existing.seekg(0L, ios::end);
+    // size_t sz = ftell(existing);
+    streampos sz = existing.tellg();
+    if (sz != (streampos)class_data_len) {
+      cerr <<  "File " << class_file_name <<
+        " already exists, with different contents (different size: " << sz <<
+        " vs. " << class_data_len<< ")." << endl;
       return 2;
     }
     else {
-      rewind(existing);
+      existing.seekg(0L, ios::beg);
+      char *mem_block = new char[class_data_len];
+      existing.read(mem_block, class_data_len);
+      // rewind(existing);
       int different_pos = -1;
       for (int pos = 0; pos < class_data_len; pos++)
-        if (fgetc(existing) != class_data[pos]) {
+        if (mem_block[pos] != class_data[pos]) {
           different_pos = pos;
           break;
         }
-      fclose(existing);
+      // fclose(existing);
+      existing.close();
       if (different_pos == -1) {
-        fprintf(stderr, "File %s already exists, with same contents.\n", class_file_name);
+        cerr << "File " << class_file_name << " already exists, with same contents." << endl;
         return 1;
       }
       else {
-        fprintf(stderr, "File %s already exists, with different contents (first different byte @ pos %d)\n", class_file_name, different_pos);
+        cerr <<  "File " << class_file_name << " already exists, with different contents (first different byte @ pos " << different_pos << " )" << endl;
         // exit(-1);
         return 2;
       }
@@ -122,10 +136,11 @@ int write_class(const char* name, const char* out_base_dir,
     /* for (int i = 0; i < strlen(class_file_name); i++) */
     /*   if (class_file_name[i] == '$') */
     /*  class_file_name[i] = '_'; */
-    printf("* Writing %s (%d bytes)...\n", class_file_name, class_data_len);
-    FILE* class_file = fopen(class_file_name, "a");
-    fwrite(class_data, class_data_len, 1, class_file);
-    fclose(class_file);
+    cout << "* Writing " << class_file_name << " (" << class_data_len << " bytes)..." << endl;
+    ofstream class_file;
+    class_file.open(class_file_name, ios::app | ios::binary);
+    class_file.write((const char*)class_data, class_data_len);
+    class_file.close();
   }
   return 0;
 }
@@ -142,50 +157,50 @@ int hash_code(JNIEnv *env, const jobject obj) {
   }
 }
 
-void print_classloader_info(FILE* context_stream, JNIEnv *env, const jobject loader,
-                            const int loader_hash) {
+void print_classloader_info(ostream* context_stream, JNIEnv *env,
+                            const jobject loader, const int loader_hash) {
   if (loader == NULL)
-    fprintf(context_stream, "[Null classloader (bootstrap?)]\n");
+    *context_stream << "[Null classloader (bootstrap?)]" << endl;
   else {
     // Show information about the class loader.
     jclass loader_class = env->GetObjectClass(loader);
     if (loader_class == NULL)
-      fprintf(context_stream, "[Error retrieving classloader %d (#1).]\n", loader_hash);
+      *context_stream << "[Error retrieving classloader " << loader_hash << " (#1).]" << endl;
     else {
       char* loader_sig;
       jvmtiError err = jvmti->GetClassSignature(loader_class, &loader_sig, NULL);
       if ((err == JVMTI_ERROR_NONE) && (loader_sig != NULL))
-        fprintf(context_stream, "[classloader %d class: %s]\n", loader_hash, loader_sig);
+        *context_stream << "[classloader " << loader_hash << " class: " << loader_sig << "]" << endl;
       else
-        fprintf(context_stream, "[Error retrieving classloader %d (#2).]\n", loader_hash);
+        *context_stream << "[Error retrieving classloader " << loader_hash << " (#2).]" << endl;
     }
   }
-  fflush(context_stream);
+  context_stream->flush();
 }
 
 // Test disassembler of selected bytecode instructions.
-void print_bc(FILE* stream, const unsigned char c) {
+void print_bc(ostream* stream, const unsigned char c) {
   switch (c) {
-  case  18: fprintf(stream, "ldc"            ); break;
-  case  19: fprintf(stream, "ldc_w"          ); break;
-  case 178: fprintf(stream, "getstatic"      ); break;
-  case 179: fprintf(stream, "putstatic"      ); break;
-  case 182: fprintf(stream, "invokevirtual"  ); break;
-  case 183: fprintf(stream, "invokespecial"  ); break;
-  case 184: fprintf(stream, "invokestatic"   ); break;
-  case 185: fprintf(stream, "invokeinterface"); break;
-  case 186: fprintf(stream, "invokedynamic"  ); break;
-  case 187: fprintf(stream, "new"            ); break;
-  case 189: fprintf(stream, "anewarray"      ); break;
-  case 191: fprintf(stream, "athrow"         ); break;
-  case 192: fprintf(stream, "checkcast"      ); break;
-  case 193: fprintf(stream, "instanceof"     ); break;
-  case 197: fprintf(stream, "multianewarray" ); break;
-  default : fprintf(stream, "bytecode-%d", c );
+  case  18: *stream << "ldc"            ; break;
+  case  19: *stream << "ldc_w"          ; break;
+  case 178: *stream << "getstatic"      ; break;
+  case 179: *stream << "putstatic"      ; break;
+  case 182: *stream << "invokevirtual"  ; break;
+  case 183: *stream << "invokespecial"  ; break;
+  case 184: *stream << "invokestatic"   ; break;
+  case 185: *stream << "invokeinterface"; break;
+  case 186: *stream << "invokedynamic"  ; break;
+  case 187: *stream << "new"            ; break;
+  case 189: *stream << "anewarray"      ; break;
+  case 191: *stream << "athrow"         ; break;
+  case 192: *stream << "checkcast"      ; break;
+  case 193: *stream << "instanceof"     ; break;
+  case 197: *stream << "multianewarray" ; break;
+  default : *stream << "bytecode-" << c ;
   }
 }
 
-void count_bytecode_location(FILE* context_stream, jlocation location,
+void count_bytecode_location(ostream* context_stream, jlocation location,
                              jmethodID method_id) {
   jint bytecode_count_ptr;
   unsigned char* bytecodes_ptr;
@@ -198,27 +213,30 @@ void count_bytecode_location(FILE* context_stream, jlocation location,
     bytecodes[(unsigned char)bc]++;
     // pthread_mutex_unlock(&stats_lock);
 
-    fprintf(context_stream, "[bc:"); print_bc(context_stream, bc); fprintf(context_stream, "]");
+    *context_stream << "[bc:"; print_bc(context_stream, bc); *context_stream << "]";
   }
   else
-    fprintf(context_stream, "(error reading bytecode)");
+    *context_stream << "(error reading bytecode)";
 }
 
-void print_location(FILE* context_stream, const jlocation location,
+void print_location(ostream* context_stream, const jlocation location,
                     const jmethodID method_id, int* read_bytecode) {
   jvmtiJlocationFormat locFormat;
   if (location == -1) {
-    fprintf(context_stream, "(native method) "); return;
+    *context_stream << "(native method) ";
+    return;
   }
   jvmtiError err1 = jvmti->GetJLocationFormat(&locFormat);
   if (err1 != JVMTI_ERROR_NONE) {
-    fprintf(context_stream, "(error reading location) "); return;
+    *context_stream << "(error reading location) ";
+    return;
   }
   else if (locFormat != JVMTI_JLOCATION_JVMBCI) {
-    fprintf(context_stream, "(unsupported location type) "); return;
+    *context_stream << "(unsupported location type) ";
+    return;
   }
   else {
-    fprintf(context_stream, "(bytecode @ position %ld) ", location);
+    *context_stream << "(bytecode @ position " << location <<  ") ";
     if (*read_bytecode) {
       count_bytecode_location(context_stream, location, method_id);
       *read_bytecode = 0;
@@ -238,41 +256,34 @@ void print_location(FILE* context_stream, const jlocation location,
       // one we need. This should always be the case, as
       // the last instruction is always a non-invoke
       // (e.g. areturn).
-      fprintf(context_stream, "(candidate line number: %d) ", table[j-1].line_number);
+      *context_stream << "(candidate line number: " << table[j-1].line_number << ") ";
       found = 1;
       break;
     }
       }
       if (!found)
-    fprintf(context_stream, "(could not determine source location) ");
+        *context_stream << "(could not determine source location) ";
     }
     else
-      fprintf(context_stream, "(source location: error %d) ", lines_err);
+      *context_stream << "(source location: error " << lines_err << ") ";
   }
 }
 
-FILE* choose_stdout_or_file(const char* class_name, const char* out_base_dir,
-                            const char* out_dir, const int file_mode) {
+ostream *choose_stdout_or_file(const char* class_name, const char* out_base_dir,
+                               const char* out_dir, const int file_mode) {
   if (file_mode == USE_STDOUT)
-    return stdout;
+    return &cout;
   else {
-    size_t info_file_name_len = strlen(out_dir) + 1 + strlen(class_name) + 7;
-    char* info_file_name = (char*)alloca(info_file_name_len);
-    int r = snprintf(info_file_name, info_file_name_len, "%s/%s.info", out_base_dir, class_name);
-    if (r >= (int)info_file_name_len) {
-      fprintf(stderr, "Internal error: malformed info file name, wrote %d bytes (out of %zu)\n", r, info_file_name_len);
-      exit(-1);
-    }
-    FILE* context_stream = fopen(info_file_name, "a");
-    if (context_stream == NULL) {
-      fprintf(stderr, "Internal error: cannot open info file %s\n", info_file_name);
-      exit(-1);
-    }
+    stringstream ss;
+    ss << out_base_dir << "/" << class_name << ".info";
+    string info_file_name = ss.str();
+    ofstream *context_stream = new ofstream;
+    context_stream->open(info_file_name, ios::app);
     return context_stream;
   }
 }
 
-void print_declaring_class(FILE* context_stream, const jmethodID method_id) {
+void print_declaring_class(ostream* context_stream, const jmethodID method_id) {
   // Find class that defines the method.
   jclass declaring_class;
   jvmtiError err2 = jvmti->GetMethodDeclaringClass(method_id, &declaring_class);
@@ -281,12 +292,12 @@ void print_declaring_class(FILE* context_stream, const jmethodID method_id) {
     char* class_sig;
     jvmtiError err3 = jvmti->GetClassSignature(declaring_class, &class_sig, NULL);
     if ((err3 == JVMTI_ERROR_NONE) && (class_sig != NULL))
-      fprintf(context_stream, "[declaring class: %s]", class_sig);
+      *context_stream << "[declaring class: " << class_sig << "]";
     else
-      fprintf(context_stream, "[declaring class not found (err3).]");
+      *context_stream << "[declaring class not found (err3).]";
   }
   else
-    fprintf(context_stream, "[declaring class not found (err2).]");
+    *context_stream << "[declaring class not found (err2).]";
 }
 
 // Reads the stack and finds the innermost method.
@@ -298,7 +309,7 @@ void write_exec_context(JNIEnv *env, const char* class_name,
   jvmtiFrameInfo* frames = (jvmtiFrameInfo*)calloc(max_frame_count, sizeof(jvmtiFrameInfo));
   jint count;
   jthread current_thread = NULL;
-  FILE* context_stream = choose_stdout_or_file(class_name, out_base_dir, out_dir, file_mode);
+  ostream *context_stream = choose_stdout_or_file(class_name, out_base_dir, out_dir, file_mode);
 
   pthread_mutex_lock(&stats_lock);
 
@@ -310,8 +321,8 @@ void write_exec_context(JNIEnv *env, const char* class_name,
   jvmtiError err = jvmti->GetStackTrace(current_thread, 0,
                                         max_frame_count, frames, &count);
   if (err != JVMTI_ERROR_NONE) {
-    fprintf(context_stream, "[error reading stack trace]");
-    fflush(context_stream);
+    *context_stream << "[error reading stack trace]";
+    context_stream->flush();
     defined_by_unknown++;
   }
   else {
@@ -326,9 +337,10 @@ void write_exec_context(JNIEnv *env, const char* class_name,
       if (err != JVMTI_ERROR_NONE) {
         defined_by_unknown++;
       } else {
-        fprintf(context_stream, "{ Frame %d: ", i);
+        *context_stream << "{ Frame " << i << ": ";
         // fprintf(context_stream, "Class %s loaded while executing method: %s\n", class_name, method_name);
-        fprintf(context_stream, "* In method: %s (signature: %s) ", method_name, method_sig == NULL? "no signature" : method_sig);
+        *context_stream << "* In method: " << method_name << " (signature: " <<
+                           (method_sig == NULL? "no signature" : method_sig) << ") " << endl;
         // Check topmost method to see if this class is a truly
         // dynamically generated/loaded class. If it's not one of the
         // known class generators/loaders, it must be due to lazy
@@ -342,25 +354,25 @@ void write_exec_context(JNIEnv *env, const char* class_name,
             else if (strcmp(method_name, "defineAnonymousClass") == 0)
               defined_by_defineAnonymousClass++;
             else {
-              fprintf(context_stream, "[Unknown top method!]");
+              *context_stream << "[Unknown top method!]";
               defined_missing++;
               read_bytecode = 1;
             }
           } else {
-            fprintf(context_stream, "[Unnamed top method!]");
+            *context_stream << "[Unnamed top method!]";
             defined_missing++;
             read_bytecode = 1;
           }
         }
         print_location(context_stream, location, method_id, &read_bytecode);
         print_declaring_class(context_stream, method_id);
-        fprintf(context_stream, " }\n");
-        fflush(context_stream);
+        *context_stream << " }" << endl;
+        context_stream->flush();
       }
     }
     if (count == 0) {
-      fprintf(context_stream, "[empty stack trace]\n");
-      fflush(context_stream);
+      *context_stream << "[empty stack trace]" << endl;
+      context_stream->flush();
       defined_by_unknown++;
     }
   }
@@ -379,16 +391,17 @@ void write_exec_context(JNIEnv *env, const char* class_name,
 
   pthread_mutex_unlock(&stats_lock);
 
-  if (file_mode != USE_STDOUT)
-    fclose(context_stream);
+  // // TODO: close
+  // if (file_mode != USE_STDOUT)
+  //   context_stream->close();
 }
 
-void printLoadedClasses(FILE* context_stream) {
+void printLoadedClasses(ostream* context_stream) {
   jint class_count;
   jclass* classes;
   jvmtiError err0 = jvmti->GetLoadedClasses(&class_count, &classes);
   if (err0 == JVMTI_ERROR_NONE) {
-    fprintf(context_stream, "%d loaded classes.\n", class_count);
+    *context_stream << class_count << " loaded classes." << endl;
     for (int i=0; i<class_count; i++) {
       // Find class signature.
       char* class_sig;
@@ -398,14 +411,14 @@ void printLoadedClasses(FILE* context_stream) {
         jfieldID* fields;
         jvmtiError err2 = jvmti->GetClassFields(classes[i], &field_count, &fields);
         if (err2 == JVMTI_ERROR_NONE)
-          fprintf(context_stream, "[class: %s (%d fields)]\n", class_sig, field_count);
+          *context_stream << "[class: " << class_sig << " (" << field_count << " fields)]" << endl;
         else
-          fprintf(context_stream, "[class: %s (cannot retrieve fields, error code %d)]\n", class_sig, err2);
-        fflush(context_stream);
+          *context_stream << "[class: " << class_sig << " (cannot retrieve fields, error code " << err2 << ")]" << endl;
+        context_stream->flush();
       }
       else {
-        fprintf(context_stream, "[Unknown class.]");
-        fflush(context_stream);
+        *context_stream << "[Unknown class.]";
+        context_stream->flush();
       }
     }
   }
@@ -627,7 +640,7 @@ JNIEXPORT void JNICALL Agent_OnUnload(JavaVM *vm) {
   for (int i = 0; i < 256; i++)
     if (bytecodes[i] != 0) {
       fprintf(stderr, "  %3d ", count++);
-      print_bc(stderr, (unsigned char)i);
+      print_bc(&cerr, (unsigned char)i);
       fprintf(stderr, " = %d\n", bytecodes[i]);
       bytecodes_sum += bytecodes[i];
     }
