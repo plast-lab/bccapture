@@ -46,6 +46,27 @@ test_run_cafe:
 test_run_tradebeans:
 	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar tradebeans
 
+test_run_h2:
+	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar h2
+
+test_run_sunflow:
+	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar sunflow
+
+test_run_xalan:
+	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar xalan
+
+test_run_avrora:
+	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar avrora
+
+test_run_jython:
+	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar jython
+
+test_run_eclipse:
+	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar eclipse
+
+hprof_tradebeans:
+	java -agentlib:hprof=heap=dump,format=b,depth=8 -jar dacapo-bach/dacapo-9.12-bach.jar tradebeans
+
 test_run_tradesoap:
 	java -agentpath:./$(AGENT_NAME).so -jar dacapo-bach/dacapo-9.12-bach.jar tradesoap
 
