@@ -27,7 +27,7 @@ then
 else
     CWD=`pwd`
     OUT_DIR=`mktemp -d`
-    echo Using ${OUT_DIR}...
+    echo Using temporary output directory ${OUT_DIR}...
     ORIGINAL_JAR=`realpath $1`
     CAPTURED_JAR=`realpath $2`
     cd ${OUT_DIR}
