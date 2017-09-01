@@ -141,6 +141,7 @@ int write_class(const string name, const string out_base_dir,
   return 0;
 }
 
+// Call hashCode() method on Java object.
 int hash_code(JNIEnv *env, const jobject obj) {
   if (!obj)
     return 0;
