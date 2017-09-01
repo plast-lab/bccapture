@@ -88,7 +88,6 @@ int write_class(const string name, const string out_base_dir,
   stringstream class_file_name_s;
   class_file_name_s << out_base_dir << "/" << name << ".class";
   string class_file_name = class_file_name_s.str();
-  cout << "Test: " << class_file_name << " vs. " << class_file_name.c_str();
   if (file_exists(class_file_name)) {
     // Output file already exists, check if its contents are the
     // same or we have another class with the same name.
