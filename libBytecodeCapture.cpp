@@ -58,6 +58,7 @@ enum OUTPUT_MODE { USE_STDOUT, USE_FILE };
 
 using namespace std;
 
+static string TOP_OUT_DIR("out");
 static map<int, string> loaders;
 
 inline bool starts_with(const string search_str, const string s) {
@@ -479,7 +480,7 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
 
   int loader_hash = hash_code(env, loader);
   stringstream ss;
-  ss << "out/" << loader_hash;
+  ss << TOP_OUT_DIR << "/" << loader_hash;
   string out_base_dir = ss.str();
   string out_dir;
   OUTPUT_MODE file_mode = USE_FILE;
@@ -549,6 +550,23 @@ ClassFileLoadHook(jvmtiEnv *jvmti_env, JNIEnv *env, jclass class_being_redefined
     pthread_mutex_unlock(&serialize_lock);
   else
     return;
+}
+
+void write_loaders() {
+  ofstream loaders_file;
+  loaders_file.open(TOP_OUT_DIR + "/loaders.json", ios::out);
+  loaders_file << "[";
+  cout << "Classloaders:" << endl;
+  for (auto it = loaders.begin(); it != loaders.end(); ++it) {
+    if (it != loaders.begin())
+      loaders_file << ", ";
+    int l_hash = it->first;
+    string l_name = it->second;
+    cout << " * " << l_name << " (hashCode() = " << l_hash << ")" << endl;
+    loaders_file << "{ loaderName : '" << l_name << "', loaderHash : '" << l_hash << "' }";
+  }
+  loaders_file << "]";
+  loaders_file.close();
 }
 
 /*
@@ -670,8 +688,5 @@ JNIEXPORT void JNICALL Agent_OnUnload(JavaVM *vm) {
   int uncounted = defined_sum - (defined_but_ignored + defined_by_unknown + defined_by_defineClass + defined_by_defineAnonymousClass + defined_missing);
   cerr << "Uncounted classes: " << uncounted << endl;
 
-  cout << "Classloaders:" << endl;
-  for (auto it = loaders.begin(); it != loaders.end(); ++it) {
-    cout << " * " << it->second << " (hashCode() = " << (it->first) << ")" << endl;
-  }
+  write_loaders();
 }
