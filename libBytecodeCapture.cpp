@@ -30,6 +30,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <map>
 
 #include <jvmti.h>
 
@@ -56,6 +57,8 @@ static int defined_but_ignored;
 enum OUTPUT_MODE { USE_STDOUT, USE_FILE };
 
 using namespace std;
+
+static map<int, string> loaders;
 
 inline bool starts_with(const string search_str, const string s) {
   return (s.substr(0, search_str.size()) == search_str);
@@ -155,22 +158,44 @@ int hash_code(JNIEnv *env, const jobject obj) {
   }
 }
 
-void print_classloader_info(ostream* context_stream, JNIEnv *env,
-                            const jobject loader, const int loader_hash) {
-  if (loader == NULL)
+void add_loader(int loader_hash, string loader_name) {
+  auto f_loader = loaders.find(loader_hash);
+  if (f_loader == loaders.end()) {
+    // Loader not found, add it.
+    loaders[loader_hash] = loader_name;
+  } else {
+    auto f_loader_name = f_loader->second;
+    if (f_loader_name != loader_name) {
+      cerr << "Error: loader-hash already points to " << f_loader_name <<
+              " but is now attempted to point to " << loader_name;
+      exit(-1);
+    }
+  }
+}
+
+void process_classloader_info(ostream* context_stream, JNIEnv *env,
+                              const jobject loader, const int loader_hash) {
+  if (loader == NULL) {
     *context_stream << "[Null classloader (bootstrap?)]" << endl;
+    add_loader(0, "Null-classloader");
+  }
   else {
     // Show information about the class loader.
     jclass loader_class = env->GetObjectClass(loader);
-    if (loader_class == NULL)
+    if (loader_class == NULL) {
       *context_stream << "[Error retrieving classloader " << loader_hash << " (#1).]" << endl;
+      add_loader(loader_hash, "No-classloader-error-1");
+    }
     else {
       char* loader_sig;
       jvmtiError err = jvmti->GetClassSignature(loader_class, &loader_sig, NULL);
-      if ((err == JVMTI_ERROR_NONE) && (loader_sig != NULL))
+      if ((err == JVMTI_ERROR_NONE) && (loader_sig != NULL)) {
         *context_stream << "[classloader " << loader_hash << " class: " << loader_sig << "]" << endl;
-      else
+        add_loader(loader_hash, loader_sig);
+      } else {
         *context_stream << "[Error retrieving classloader " << loader_hash << " (#2).]" << endl;
+        add_loader(loader_hash, "No-classloader-error-2");
+      }
     }
   }
   context_stream->flush();
@@ -388,7 +413,7 @@ void write_exec_context(JNIEnv *env, const string class_name,
       defined_by_defineAnonymousClass - dac << "] ";
   }
 
-  print_classloader_info(context_stream, env, loader, loader_hash);
+  process_classloader_info(context_stream, env, loader, loader_hash);
 
   pthread_mutex_unlock(&stats_lock);
 
@@ -644,4 +669,9 @@ JNIEXPORT void JNICALL Agent_OnUnload(JavaVM *vm) {
 
   int uncounted = defined_sum - (defined_but_ignored + defined_by_unknown + defined_by_defineClass + defined_by_defineAnonymousClass + defined_missing);
   cerr << "Uncounted classes: " << uncounted << endl;
+
+  cout << "Classloaders:" << endl;
+  for (auto it = loaders.begin(); it != loaders.end(); ++it) {
+    cout << " * " << it->second << " (hashCode() = " << (it->first) << ")" << endl;
+  }
 }
