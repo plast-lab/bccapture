@@ -17,7 +17,7 @@ function generateJar {
 
 function capture {
     generateJar ${1}
-	echo Finished capture [${1}].
+    echo Finished capture [${1}].
     FUSED_JAR="${1}-fused.jar"
     ./fuse-jars.sh ${HOME}/doop-benchmarks/dacapo-bach/${1}.jar ${1}-loaded-classes.jar ${FUSED_JAR}
     echo Finished fusion: ${FUSED_JAR}
