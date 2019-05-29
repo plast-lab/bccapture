@@ -26,3 +26,9 @@ make test_run_cafe
 
 Tests "test_run_proxy_example" and "test_run_cafe" need a correct
 ```DOOP_BENCHMARKS``` path.
+
+To use it with your program (e.g., Main.jar):
+
+```
+java -agentpath:./libBytecodeCapture.so -jar Main.jar
+```

@@ -1,6 +1,6 @@
 AGENT_NAME=libBytecodeCapture
 MANIFEST=dacapo-bach/tradebeans-skeleton/META-INF/MANIFEST.MF
-JDK_INCLUDE?=/usr/lib/jvm/java-8-openjdk-amd64/include
+JDK_INCLUDE=/usr/lib/jvm/java-1.8.0-openjdk/include
 DOOP_BENCHMARKS?=${HOME}/doop-benchmarks
 GDB=gdb -tui -args
 ANDROID_NDK_TOOLCHAIN?=${HOME}/Android/mytooldir-21/android-ndk-21/bin
