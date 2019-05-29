@@ -10,7 +10,7 @@ To compile it:
 directory containing jvmti.h. To run the tests based on
 doop-benchmarks, also set the ```DOOP_BENCHMARKS``` path.
 
-2. ```make c_agent```
+2. ```make agent```
 
 To run the tests:
 
